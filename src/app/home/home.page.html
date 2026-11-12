@@ -1,0 +1,664 @@
+<ion-content [fullscreen]="true">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <button class="brand" type="button" (click)="setPage('feed')" aria-label="PawRescue home">
+        <span class="brand-mark"><ion-icon name="paw"></ion-icon></span>
+        <span><strong>pawrescue</strong><small>Every paw deserves a home</small></span>
+      </button>
+
+      <div class="side-label">MENU</div>
+      <nav class="side-nav" aria-label="Main navigation">
+        <button [class.active]="page() === 'feed'" (click)="setPage('feed')">
+          <ion-icon name="home"></ion-icon><span>Adopt a pet</span>
+        </button>
+        <button [class.active]="page() === 'report'" (click)="setPage('report')">
+          <ion-icon name="add"></ion-icon><span>Report an animal</span>
+        </button>
+        <button [class.active]="page() === 'my-dashboard'" (click)="setPage('my-dashboard')">
+          <ion-icon name="heart"></ion-icon><span>My dashboard</span>
+        </button>
+      </nav>
+
+      @if (data.user().role === 'admin') {
+      <div class="side-label team-label">RESCUE TEAM</div>
+      <nav class="side-nav">
+        <button [class.active]="page() === 'admin'" (click)="setPage('admin')">
+          <ion-icon name="shield-checkmark"></ion-icon><span>Admin dashboard</span> @if (pendingRequests.length) {
+          <span class="nav-count">{{ pendingRequests.length }}</span> }
+        </button>
+      </nav>
+      }
+
+      <div class="sidebar-bottom">
+        <div class="help-card">
+          <span class="help-icon"><ion-icon name="sparkles"></ion-icon></span>
+          <strong>A little kindness goes a long way.</strong>
+          <span>Help a stray find their way home.</span>
+          <button (click)="setPage('report')">Report a stray <ion-icon name="arrow-forward"></ion-icon></button>
+        </div>
+        <button class="profile-button" (click)="setPage('my-dashboard')">
+          <span class="avatar">{{ data.user().fullName.charAt(0) }}</span>
+          <span class="profile-copy"
+            ><strong>{{ data.user().fullName }}</strong
+            ><small>{{ data.user().role === 'admin' ? 'Rescue team' : 'Pet adopter' }}</small></span
+          >
+          <ion-icon name="chevron-down"></ion-icon>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <div class="mobile-brand">
+          <span class="brand-mark"><ion-icon name="paw"></ion-icon></span><strong>pawrescue</strong>
+        </div>
+        <div class="breadcrumb"><span>Workspace</span><span class="crumb-dot">/</span><strong>{{ title }}</strong></div>
+        <div class="topbar-actions">
+          <span class="connection-pill" [class.connected]="data.backendOnline()">
+            <span class="connection-dot"></span>{{ data.backendMessage() }}
+          </span>
+          <button class="icon-button" aria-label="Sign in or create account" (click)="setPage('login')">
+            <ion-icon name="people"></ion-icon>
+          </button>
+          <button class="top-avatar" (click)="setPage('my-dashboard')" aria-label="Open profile">
+            {{ data.user().fullName.charAt(0) }}
+          </button>
+        </div>
+      </header>
+
+      <div class="page-content">
+        @if (page() === 'feed') {
+        <section class="welcome-row">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> A SECOND CHANCE STARTS HERE</div>
+            <h1>Find your new <span>best friend.</span></h1>
+            <p class="page-description">Every rescued pet has a story. Be part of their next chapter.</p>
+          </div>
+          <button class="button button-outline report-quick" (click)="setPage('report')">
+            <ion-icon name="add"></ion-icon> Report a stray
+          </button>
+        </section>
+
+        <section class="hero-banner">
+          <div class="hero-copy">
+            <span class="hero-tag"><ion-icon name="heart"></ion-icon> ADOPT, DON'T SHOP</span>
+            <h2>A little love can<br />change <em>everything.</em></h2>
+            <p>Meet the wonderful souls waiting for a place to call home.</p>
+            <button class="button button-white" (click)="category.set('All')">
+              Meet the animals <ion-icon name="arrow-forward"></ion-icon>
+            </button>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="hero-sun"></div>
+            <div class="hero-leaf leaf-one"></div>
+            <div class="hero-leaf leaf-two"></div>
+            <img
+              src="https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=800&q=85"
+              alt=""
+            />
+            <span class="hero-sticker"><ion-icon name="heart"></ion-icon> love at first paw</span>
+          </div>
+          <div class="hero-paw paw-one"><ion-icon name="paw"></ion-icon></div>
+        </section>
+
+        <section class="stats-strip">
+          <div class="stat-item">
+            <span class="stat-icon mint"><ion-icon name="paw"></ion-icon></span
+            ><span><strong>{{ data.animals().length }}</strong><small>animals in our care</small></span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon peach"><ion-icon name="heart"></ion-icon></span
+            ><span><strong>{{ filteredAnimals().length }}</strong><small>ready for a home</small></span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon lilac"><ion-icon name="shield-checkmark"></ion-icon></span
+            ><span><strong>100%</strong><small>full of love</small></span>
+          </div>
+          <div class="stat-note"><span class="online-dot"></span> {{ activeRescues }} rescue stories in progress</div>
+        </section>
+
+        <section class="listing-section">
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow">YOUR NEW SIDEKICK IS WAITING</div>
+              <h2>Meet the adoptables <span class="heading-count">{{ filteredAnimals().length }}</span></h2>
+            </div>
+            <label class="search-box"
+              ><ion-icon name="search"></ion-icon
+              ><input
+                aria-label="Search pets"
+                placeholder="Search by name or location"
+                [ngModel]="searchText()"
+                (ngModelChange)="searchText.set($event)"
+            /></label>
+          </div>
+          <div class="filter-row">
+            <div class="category-pills">
+              @for (option of ['All', 'Dogs', 'Cats', 'Others']; track option) {
+              <button [class.selected]="category() === option" (click)="category.set($any(option))">
+                {{ option }}
+              </button>
+              }
+            </div>
+            <div class="extra-filters">
+              <label
+                >Gender
+                <select
+                  aria-label="Filter by gender"
+                  [ngModel]="genderFilter()"
+                  (ngModelChange)="genderFilter.set($event)"
+                >
+                  <option>All</option>
+                  <option>Male</option>
+                  <option>Female</option>
+                </select></label
+              >
+              <label
+                >Age
+                <select
+                  aria-label="Filter by age group"
+                  [ngModel]="ageFilter()"
+                  (ngModelChange)="ageFilter.set($event)"
+                >
+                  <option>All</option>
+                  <option>Young</option>
+                  <option>Adult</option>
+                </select></label
+              >
+              <span class="sort-label"><ion-icon name="sparkles"></ion-icon> Vet-checked</span>
+            </div>
+          </div>
+
+          @if (filteredAnimals().length) {
+          <div class="pet-grid">
+            @for (animal of filteredAnimals(); track animal.id) {
+            <article class="pet-card">
+              <div class="pet-image-wrap">
+                <img class="pet-image" [src]="photo(animal)" [alt]="animal.name" />
+                <span class="available-badge"><span></span> Available</span>
+                <button class="favorite-button" aria-label="Favorite pet"><ion-icon name="heart"></ion-icon></button>
+              </div>
+              <div class="pet-card-content">
+                <div class="pet-title-row">
+                  <h3>{{ animal.name }}</h3>
+                  <span class="pet-type">{{ animal.animalType }}</span>
+                </div>
+                <div class="pet-facts">
+                  <span><ion-icon name="people"></ion-icon>{{ animal.gender }}</span>
+                  <span
+                    ><ion-icon name="time"></ion-icon>{{ animal.age === null ? 'Age unknown' : animal.age + (animal.age
+                    === 1 ? ' year' : ' years') }}</span
+                  >
+                </div>
+                <p class="pet-location"><ion-icon name="locate"></ion-icon>{{ animal.address }}</p>
+                <p class="pet-story">{{ animal.medicalNotes || animal.conditionNotes }}</p>
+                <button class="button button-primary pet-cta" (click)="startAdoption(animal)">
+                  Meet {{ animal.name }} <ion-icon name="arrow-forward"></ion-icon>
+                </button>
+              </div>
+            </article>
+            }
+          </div>
+          } @else {
+          <div class="empty-state">
+            <span class="empty-icon"><ion-icon name="paw"></ion-icon></span>
+            <h3>No adoptable pets found</h3>
+            <p>Try a different search, or check back soon for new rescue stories.</p>
+          </div>
+          }
+        </section>
+        } @if (page() === 'report') {
+        <section class="page-heading">
+          <div class="eyebrow"><span class="eyebrow-line"></span> HELP US HELP THEM</div>
+          <h1>Report a stray <span>animal.</span></h1>
+          <p class="page-description">A few details can help our rescue team reach an animal in need.</p>
+        </section>
+        <section class="form-layout">
+          <form class="form-card" (ngSubmit)="submitReport()">
+            <div class="form-card-title">
+              <span class="form-step">01</span>
+              <div>
+                <h2>Rescue details</h2>
+                <p>Tell us what you saw.</p>
+              </div>
+            </div>
+            <div class="photo-upload">
+              <input
+                #galleryInput
+                class="gallery-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                aria-label="Choose animal photo from gallery"
+                (change)="chooseGalleryPhoto($event)"
+              />
+              @if (reportForm.photoUrl) {
+              <div class="photo-preview">
+                <img [src]="reportForm.photoUrl" alt="Selected animal" />
+                <span class="photo-preview-label">Photo selected</span>
+              </div>
+              } @else {
+              <div class="upload-placeholder">
+                <span class="upload-icon"><ion-icon name="images"></ion-icon></span>
+                <strong>Upload a photo from your gallery</strong>
+                <span>Choose a JPG, PNG, or WebP image up to 2.5 MB</span>
+              </div>
+              }
+              <div class="photo-actions">
+                <button class="button button-primary" type="button" (click)="galleryInput.click()">
+                  <ion-icon name="images"></ion-icon>
+                  Choose from gallery
+                </button>
+                <button class="button button-outline" type="button" (click)="capturePhoto()">
+                  <ion-icon name="camera"></ion-icon>
+                  Take a photo
+                </button>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label class="field"
+                ><span>Animal type <i>*</i></span
+                ><select name="animalType" [(ngModel)]="reportForm.animalType">
+                  <option>Dog</option>
+                  <option>Cat</option>
+                  <option>Other</option>
+                </select></label
+              >
+              <label class="field"
+                ><span>Location / address <i>*</i></span>
+                <div class="input-with-action">
+                  <input name="address" [(ngModel)]="reportForm.address" placeholder="Street, barangay, city" /><button
+                    type="button"
+                    class="locate-button"
+                    (click)="locateMe()"
+                    aria-label="Use my location"
+                  >
+                    <ion-icon name="locate"></ion-icon>
+                  </button></div
+              ></label>
+              <label class="field full-width"
+                ><span>What is the animal's condition? <i>*</i></span
+                ><textarea
+                  name="conditionNotes"
+                  [(ngModel)]="reportForm.conditionNotes"
+                  rows="4"
+                  placeholder="Describe what you noticed, any injuries, and how the animal is behaving..."
+                ></textarea>
+              </label>
+            </div>
+            <div class="privacy-note">
+              <ion-icon name="shield-checkmark"></ion-icon
+              ><span>Your report is shared only with our verified rescue team.</span>
+            </div>
+            <button class="button button-primary submit-button" type="submit">
+              Send rescue alert <ion-icon name="arrow-forward"></ion-icon>
+            </button>
+          </form>
+          <aside class="report-aside">
+            <div class="aside-card rescue-note">
+              <span class="aside-illustration"><ion-icon name="heart"></ion-icon></span>
+              <h3>Thank you for caring.</h3>
+              <p>Your report helps rescuers respond quickly and get animals the care they need.</p>
+            </div>
+            <div class="aside-card">
+              <div class="aside-card-heading">
+                <span class="tiny-icon"><ion-icon name="time"></ion-icon></span><strong>What happens next?</strong>
+              </div>
+              <div class="step-list">
+                <div>
+                  <span>1</span>
+                  <p><strong>Report received</strong><small>Our team reviews the location and details.</small></p>
+                </div>
+                <div>
+                  <span>2</span>
+                  <p><strong>Rescue dispatched</strong><small>A local rescuer heads out to help.</small></p>
+                </div>
+                <div>
+                  <span>3</span>
+                  <p><strong>Care begins</strong><small>We share updates as the animal recovers.</small></p>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </section>
+        } @if (page() === 'my-dashboard') {
+        <section class="page-heading dashboard-welcome">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> YOUR PAWRESCUE SPACE</div>
+            <h1>Hi, {{ data.user().fullName.split(' ')[0] }} <span>👋</span></h1>
+            <p class="page-description">Keep track of your reports and adoption journey.</p>
+          </div>
+          <button class="button button-primary" (click)="setPage('report')">
+            <ion-icon name="add"></ion-icon> New rescue report
+          </button>
+        </section>
+        <section class="dashboard-metrics">
+          <article>
+            <span class="metric-icon peach"><ion-icon name="alert-circle"></ion-icon></span>
+            <div><small>Your rescue reports</small><strong>{{ myReports.length }}</strong></div>
+          </article>
+          <article>
+            <span class="metric-icon mint"><ion-icon name="heart"></ion-icon></span>
+            <div><small>Adoption requests</small><strong>{{ myAdoptions.length }}</strong></div>
+          </article>
+          <article>
+            <span class="metric-icon lilac"><ion-icon name="checkmark-circle"></ion-icon></span>
+            <div><small>Pets ready to meet</small><strong>{{ readyAnimalCount }}</strong></div>
+          </article>
+        </section>
+        <section class="dashboard-columns">
+          <article class="content-card">
+            <div class="content-card-header">
+              <div>
+                <h2>My rescue reports</h2>
+                <p>Follow the animals you helped.</p>
+              </div>
+              <button class="text-button" (click)="setPage('report')">
+                New report <ion-icon name="arrow-forward"></ion-icon>
+              </button>
+            </div>
+            @for (animal of myReports; track animal.id) {
+            <div class="activity-row">
+              <img [src]="photo(animal)" [alt]="animal.name" />
+              <div class="activity-copy">
+                <strong>{{ animal.name }}</strong
+                ><small>{{ animal.address }} · {{ timeLabel(animal.createdAt) }}</small>
+              </div>
+              <span class="status-chip" [class.status-green]="animal.status === 'Healed & Ready'"
+                >{{ animal.status }}</span
+              >
+            </div>
+            } @empty {
+            <div class="empty-inline">
+              <ion-icon name="paw"></ion-icon><span>No reports yet. Your first report could save a life.</span>
+            </div>
+            }
+          </article>
+          <article class="content-card">
+            <div class="content-card-header">
+              <div>
+                <h2>Adoption journey</h2>
+                <p>Your applications and updates.</p>
+              </div>
+            </div>
+            @for (adoption of myAdoptions; track adoption.id) {
+            <div class="application-row">
+              <span class="application-paw"><ion-icon name="paw"></ion-icon></span>
+              <div class="activity-copy">
+                <strong>{{ adoption.animalName || 'Your adoptable pet' }}</strong
+                ><small>Applied {{ timeLabel(adoption.submittedAt) }}</small>
+              </div>
+              <span class="status-chip" [class.status-green]="adoption.requestStatus === 'Approved'"
+                >{{ adoption.requestStatus }}</span
+              >
+            </div>
+            } @empty {
+            <div class="empty-inline">
+              <ion-icon name="heart"></ion-icon><span>No applications yet. Meet the pets waiting for you.</span>
+            </div>
+            }
+            <button class="button button-outline full-button" (click)="setPage('feed')">
+              Explore adoptable pets <ion-icon name="arrow-forward"></ion-icon>
+            </button>
+          </article>
+        </section>
+        <section class="demo-role-switch">
+          <div>
+            <strong>Viewing the app as {{ data.user().role }}.</strong
+            ><span>Switch dashboard view to preview both experiences.</span>
+          </div>
+          <div class="role-actions">
+            <button (click)="useRole(data.user().role === 'admin' ? 'user' : 'admin')">
+              Switch to {{ data.user().role === 'admin' ? 'user' : 'admin' }} view
+              <ion-icon name="arrow-forward"></ion-icon></button
+            ><button (click)="logout()">Sign out <ion-icon name="log-out"></ion-icon></button>
+          </div>
+        </section>
+        } @if (page() === 'admin') {
+        <section class="page-heading dashboard-welcome">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> PAWRESCUE OPERATIONS</div>
+            <h1>Rescue team <span>dashboard.</span></h1>
+            <p class="page-description">Every update brings an animal one step closer to home.</p>
+          </div>
+          <span class="admin-badge"><ion-icon name="shield-checkmark"></ion-icon> ADMIN VIEW</span>
+        </section>
+        <section class="dashboard-metrics">
+          <article>
+            <span class="metric-icon peach"><ion-icon name="alert-circle"></ion-icon></span>
+            <div><small>Pending rescue alerts</small><strong>{{ pendingAnimalCount }}</strong></div>
+          </article>
+          <article>
+            <span class="metric-icon blue"><ion-icon name="paw"></ion-icon></span>
+            <div><small>Animals in treatment</small><strong>{{ treatmentAnimalCount }}</strong></div>
+          </article>
+          <article>
+            <span class="metric-icon mint"><ion-icon name="heart"></ion-icon></span>
+            <div><small>Adoption requests</small><strong>{{ pendingRequests.length }}</strong></div>
+          </article>
+          <article>
+            <span class="metric-icon lilac"><ion-icon name="checkmark-circle"></ion-icon></span>
+            <div><small>Ready for adoption</small><strong>{{ readyAnimalCount }}</strong></div>
+          </article>
+        </section>
+        <section class="content-card admin-card">
+          <div class="admin-toolbar">
+            <div class="admin-tabs">
+              <button [class.active]="adminTab() === 'rescue'" (click)="adminTab.set('rescue')">
+                Rescue alerts <span>{{ activeRescues }}</span></button
+              ><button [class.active]="adminTab() === 'adoptions'" (click)="adminTab.set('adoptions')">
+                Adoption requests <span>{{ pendingRequests.length }}</span>
+              </button>
+            </div>
+            <span class="sort-label"><ion-icon name="time"></ion-icon> Newest first</span>
+          </div>
+          @if (adminTab() === 'rescue') {
+          <div class="rescue-list">
+            @for (animal of adminAnimals; track animal.id) {
+            <article class="rescue-card">
+              <img [src]="photo(animal)" [alt]="animal.name" />
+              <div class="rescue-details">
+                <div class="rescue-topline">
+                  <h3>{{ animal.name }}</h3>
+                  <span
+                    class="status-chip"
+                    [class.status-pending]="animal.status === 'Pending Rescue'"
+                    [class.status-green]="animal.status === 'Healed & Ready'"
+                    >{{ animal.status }}</span
+                  >
+                </div>
+                <div class="rescue-meta">
+                  <span><ion-icon name="locate"></ion-icon>{{ animal.address }}</span
+                  ><span><ion-icon name="time"></ion-icon>Reported {{ timeLabel(animal.createdAt) }}</span>
+                </div>
+                <p>{{ animal.conditionNotes }}</p>
+                @if (animal.medicalNotes) {
+                <small class="medical-note"
+                  ><ion-icon name="shield-checkmark"></ion-icon> {{ animal.medicalNotes }}</small
+                >
+                }
+                <button class="text-button edit-profile" (click)="editAnimalProfile(animal)">Edit pet profile</button>
+                @if (animal.status !== 'Healed & Ready' && animal.status !== 'Reserved for Pickup') {
+                <button class="button button-primary rescue-action" (click)="advanceAnimal(animal)">
+                  {{ animal.status === 'Pending Rescue' ? 'Accept rescue' : animal.status === 'Rescued / In Transit' ?
+                  'Start treatment' : 'Clear for adoption' }} <ion-icon name="arrow-forward"></ion-icon>
+                </button>
+                }
+              </div>
+            </article>
+            } @empty {
+            <div class="empty-state">
+              <span class="empty-icon"><ion-icon name="checkmark-circle"></ion-icon></span>
+              <h3>All rescue alerts are up to date</h3>
+            </div>
+            }
+          </div>
+          } @else {
+          <div class="request-list">
+            @for (adoption of data.adoptions(); track adoption.id) {
+            <article class="request-card">
+              <span class="request-avatar">{{ adoption.applicantName.charAt(0) }}</span>
+              <div class="request-info">
+                <div class="rescue-topline">
+                  <h3>{{ adoption.applicantName }} <small>wants to adopt</small> {{ adoption.animalName }}</h3>
+                  <span
+                    class="status-chip"
+                    [class.status-pending]="adoption.requestStatus === 'Pending'"
+                    [class.status-green]="adoption.requestStatus === 'Approved'"
+                    >{{ adoption.requestStatus }}</span
+                  >
+                </div>
+                <p>{{ adoption.reason }}</p>
+                <div class="request-facts">
+                  <span><strong>Contact</strong> {{ adoption.contactNumber }}</span
+                  ><span><strong>Home</strong> {{ adoption.homeDetails }}</span>
+                </div>
+              </div>
+              @if (adoption.requestStatus === 'Pending') {
+              <div class="request-actions">
+                <button class="button button-primary" (click)="reviewAdoption(adoption, 'Approved')">Approve</button
+                ><button class="button button-outline" (click)="reviewAdoption(adoption, 'Declined')">Decline</button>
+              </div>
+              }
+            </article>
+            } @empty {
+            <div class="empty-state">
+              <span class="empty-icon"><ion-icon name="heart"></ion-icon></span>
+              <h3>No adoption requests yet</h3>
+              <p>New applications will show up here.</p>
+            </div>
+            }
+          </div>
+          }
+        </section>
+        <section class="demo-role-switch">
+          <div>
+            <strong>Admin permissions</strong><span>Manage rescue status, medical notes and adoption approvals.</span>
+          </div>
+          <div class="role-actions">
+            <button (click)="useRole('user')">
+              Switch to user dashboard <ion-icon name="arrow-forward"></ion-icon></button
+            ><button (click)="logout()">Sign out <ion-icon name="log-out"></ion-icon></button>
+          </div>
+        </section>
+        } @if (page() === 'login') {
+        <section class="auth-layout">
+          <div class="auth-intro">
+            <span class="auth-mark"><ion-icon name="paw"></ion-icon></span>
+            <div class="eyebrow">WELCOME TO PAWRESCUE</div>
+            <h1>Small actions.<br /><span>Big second chances.</span></h1>
+            <p>Join a caring community bringing rescue stories to happy endings.</p>
+            <div class="auth-quote">
+              <ion-icon name="heart"></ion-icon
+              ><span
+                >“Saving one animal won't change the world, but for that one animal, the world changes forever.”</span
+              >
+            </div>
+          </div>
+          <form class="auth-card" (ngSubmit)="submitAuth()">
+            <div class="auth-switch">
+              <button type="button" [class.active]="loginForm.mode === 'login'" (click)="loginForm.mode = 'login'">
+                Sign in</button
+              ><button
+                type="button"
+                [class.active]="loginForm.mode === 'register'"
+                (click)="loginForm.mode = 'register'"
+              >
+                Create account
+              </button>
+            </div>
+            <h2>{{ loginForm.mode === 'login' ? 'Welcome back' : 'Join our community' }}</h2>
+            <p>
+              {{ loginForm.mode === 'login' ? 'Sign in to continue your rescue journey.' : 'Create your free adopter
+              account.' }}
+            </p>
+            @if (loginForm.mode === 'register') {
+            <label class="field"
+              ><span>Full name</span
+              ><input name="fullName" [(ngModel)]="loginForm.fullName" required placeholder="Your name"
+            /></label>
+            }
+            <label class="field"
+              ><span>Email address</span
+              ><input
+                name="email"
+                type="email"
+                [(ngModel)]="loginForm.email"
+                required
+                placeholder="you@example.com" /></label
+            ><label class="field"
+              ><span>Password</span
+              ><input
+                name="password"
+                type="password"
+                [(ngModel)]="loginForm.password"
+                required
+                minlength="8"
+                placeholder="At least 8 characters" /></label
+            ><button class="button button-primary submit-button" type="submit">
+              {{ loginForm.mode === 'login' ? 'Sign in' : 'Create account' }} <ion-icon name="arrow-forward"></ion-icon>
+            </button>
+            <div class="auth-divider"><span>OR PREVIEW A DASHBOARD</span></div>
+            <div class="demo-buttons">
+              <button type="button" (click)="useRole('user')"><ion-icon name="heart"></ion-icon> User view</button
+              ><button type="button" (click)="useRole('admin')">
+                <ion-icon name="shield-checkmark"></ion-icon> Admin view
+              </button>
+            </div>
+            <button type="button" class="back-link" (click)="setPage('feed')">Back to adoptable pets</button>
+          </form>
+        </section>
+        }
+
+        <footer class="footer">
+          <span>© 2026 PawRescue</span><span>Made with <ion-icon name="heart"></ion-icon> for every paw</span>
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  @if (selectedAnimal(); as animal) {
+  <div class="modal-backdrop">
+    <section class="adoption-modal" role="dialog" aria-modal="true" aria-labelledby="adoption-title">
+      <button class="modal-close" aria-label="Close" (click)="selectedAnimal.set(null)">×</button>
+      <img class="modal-pet-photo" [src]="photo(animal)" [alt]="animal.name" />
+      <div class="modal-body">
+        <div class="eyebrow">A NEW CHAPTER STARTS HERE</div>
+        <h2 id="adoption-title">Meet {{ animal.name }}</h2>
+        <p>Tell our rescue team a little about the home you can offer.</p>
+        <form (ngSubmit)="submitAdoption()">
+          <label class="field"
+            ><span>Contact number <i>*</i></span
+            ><input
+              name="contactNumber"
+              [(ngModel)]="adoptionForm.contactNumber"
+              required
+              placeholder="09xx xxx xxxx" /></label
+          ><label class="field"
+            ><span>Living situation <i>*</i></span
+            ><textarea
+              name="homeDetails"
+              [(ngModel)]="adoptionForm.homeDetails"
+              required
+              rows="2"
+              placeholder="House or apartment? Is it pet-friendly?"
+            ></textarea></label
+          ><label class="field"
+            ><span>Why would you like to adopt {{ animal.name }}? <i>*</i></span
+            ><textarea
+              name="reason"
+              [(ngModel)]="adoptionForm.reason"
+              required
+              rows="3"
+              placeholder="Share a little about your plans..."
+            ></textarea></label
+          ><button class="button button-primary submit-button" type="submit">
+            Send adoption request <ion-icon name="arrow-forward"></ion-icon>
+          </button>
+        </form>
+      </div>
+    </section>
+  </div>
+  } @if (toast()) {
+  <div class="toast-message" role="status"><ion-icon name="checkmark-circle"></ion-icon>{{ toast() }}</div>
+  }
+</ion-content>
