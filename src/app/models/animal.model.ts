@@ -4,6 +4,7 @@ export type AnimalStatus =
 export interface Animal {
   id: string;
   reportedBy: string;
+  reportedById?: string;
   animalType: 'Dog' | 'Cat' | 'Other';
   photoUrl: string;
   address: string;
@@ -15,6 +16,16 @@ export interface Animal {
   name: string;
   age: number | null;
   gender: 'Male' | 'Female' | 'Unknown';
+  createdAt: string;
+}
+
+export interface AnimalReportHistory {
+  id: string;
+  animalId: string;
+  reportedBy: string;
+  animalName: string;
+  eventType: 'submitted' | 'status_changed';
+  status: AnimalStatus;
   createdAt: string;
 }
 

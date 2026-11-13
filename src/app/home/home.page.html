@@ -8,35 +8,38 @@
 
       <div class="side-label">MENU</div>
       <nav class="side-nav" aria-label="Main navigation">
+        @if (data.authenticated() && data.identityVerified() && data.user().role === 'admin') {
+        <button [class.active]="page() === 'admin'" (click)="setPage('admin')">
+          <ion-icon name="shield-checkmark"></ion-icon><span>Admin dashboard</span> @if (pendingRequests.length) {
+          <span class="nav-count">{{ pendingRequests.length }}</span> }
+        </button>
+        } @else if (data.authenticated() && data.identityVerified() && data.user().role === 'user') {
         <button [class.active]="page() === 'feed'" (click)="setPage('feed')">
           <ion-icon name="home"></ion-icon><span>Adopt a pet</span>
         </button>
         <button [class.active]="page() === 'report'" (click)="setPage('report')">
           <ion-icon name="add"></ion-icon><span>Report an animal</span>
         </button>
-        <button [class.active]="page() === 'my-dashboard'" (click)="setPage('my-dashboard')">
-          <ion-icon name="heart"></ion-icon><span>My dashboard</span>
+        <button [class.active]="page() === 'my-reports'" (click)="setPage('my-reports')">
+          <ion-icon name="heart"></ion-icon><span>My reports</span>
         </button>
-      </nav>
-
-      @if (data.user().role === 'admin') {
-      <div class="side-label team-label">RESCUE TEAM</div>
-      <nav class="side-nav">
-        <button [class.active]="page() === 'admin'" (click)="setPage('admin')">
-          <ion-icon name="shield-checkmark"></ion-icon><span>Admin dashboard</span> @if (pendingRequests.length) {
-          <span class="nav-count">{{ pendingRequests.length }}</span> }
+        } @else {
+        <button [class.active]="page() === 'login'" (click)="setPage('login')">
+          <ion-icon name="people"></ion-icon><span>Sign in / create account</span>
         </button>
+        }
       </nav>
-      }
 
       <div class="sidebar-bottom">
+        @if (!(data.authenticated() && data.identityVerified() && data.user().role === 'admin')) {
         <div class="help-card">
           <span class="help-icon"><ion-icon name="sparkles"></ion-icon></span>
           <strong>A little kindness goes a long way.</strong>
           <span>Help a stray find their way home.</span>
           <button (click)="setPage('report')">Report a stray <ion-icon name="arrow-forward"></ion-icon></button>
         </div>
-        <button class="profile-button" (click)="setPage('my-dashboard')">
+        } @if (data.authenticated() && data.identityVerified()) {
+        <button class="profile-button" (click)="setPage(data.user().role === 'admin' ? 'admin' : 'my-reports')">
           <span class="avatar">{{ data.user().fullName.charAt(0) }}</span>
           <span class="profile-copy"
             ><strong>{{ data.user().fullName }}</strong
@@ -44,6 +47,13 @@
           >
           <ion-icon name="chevron-down"></ion-icon>
         </button>
+        } @else {
+        <button class="profile-button" (click)="setPage('login')">
+          <span class="avatar"><ion-icon name="people"></ion-icon></span>
+          <span class="profile-copy"><strong>Sign in</strong><small>Access your account</small></span>
+          <ion-icon name="chevron-down"></ion-icon>
+        </button>
+        }
       </div>
     </aside>
 
@@ -57,12 +67,19 @@
           <span class="connection-pill" [class.connected]="data.backendOnline()">
             <span class="connection-dot"></span>{{ data.backendMessage() }}
           </span>
+          @if (!data.authenticated() || !data.identityVerified()) {
           <button class="icon-button" aria-label="Sign in or create account" (click)="setPage('login')">
             <ion-icon name="people"></ion-icon>
           </button>
-          <button class="top-avatar" (click)="setPage('my-dashboard')" aria-label="Open profile">
+          } @if (data.authenticated() && data.identityVerified()) {
+          <button
+            class="top-avatar"
+            (click)="setPage(data.user().role === 'admin' ? 'admin' : 'my-reports')"
+            aria-label="Open profile"
+          >
             {{ data.user().fullName.charAt(0) }}
           </button>
+          }
         </div>
       </header>
 
@@ -320,12 +337,12 @@
             </div>
           </aside>
         </section>
-        } @if (page() === 'my-dashboard') {
+        } @if (page() === 'my-reports') {
         <section class="page-heading dashboard-welcome">
           <div>
-            <div class="eyebrow"><span class="eyebrow-line"></span> YOUR PAWRESCUE SPACE</div>
-            <h1>Hi, {{ data.user().fullName.split(' ')[0] }} <span>👋</span></h1>
-            <p class="page-description">Keep track of your reports and adoption journey.</p>
+            <div class="eyebrow"><span class="eyebrow-line"></span> YOUR RESCUE ACTIVITY</div>
+            <h1>My reports <span>&amp; requests.</span></h1>
+            <p class="page-description">Track your rescue reports, history, and adoption applications.</p>
           </div>
           <button class="button button-primary" (click)="setPage('report')">
             <ion-icon name="add"></ion-icon> New rescue report
@@ -401,19 +418,78 @@
             </button>
           </article>
         </section>
-        <section class="demo-role-switch">
-          <div>
-            <strong>Viewing the app as {{ data.user().role }}.</strong
-            ><span>Switch dashboard view to preview both experiences.</span>
+        <section class="content-card">
+          <div class="content-card-header">
+            <div>
+              <h2>Report history</h2>
+              <p>Updates from the rescue team for your reports.</p>
+            </div>
           </div>
+          @for (entry of myReportHistory; track entry.id) {
+          <div class="application-row">
+            <span class="application-paw"><ion-icon name="time"></ion-icon></span>
+            <div class="activity-copy">
+              <strong>{{ entry.animalName }} · {{ reportHistoryLabel(entry) }}</strong>
+              <small>{{ timeLabel(entry.createdAt) }}</small>
+            </div>
+            <span class="status-chip" [class.status-pending]="entry.status === 'Pending Rescue'"
+              >{{ entry.status }}</span
+            >
+          </div>
+          } @empty {
+          <div class="empty-inline"><ion-icon name="time"></ion-icon><span>Report updates will appear here.</span></div>
+          }
+        </section>
+        @if (data.backendOnline()) {
+        <section class="content-card">
+          <div class="content-card-header">
+            <div>
+              <h2>Account password</h2>
+              <p>Changes apply only to your signed-in account.</p>
+            </div>
+          </div>
+          <form class="password-form" (ngSubmit)="changePassword()">
+            <label class="field"
+              ><span>Current password</span
+              ><input
+                type="password"
+                name="currentPassword"
+                autocomplete="current-password"
+                [(ngModel)]="passwordForm.currentPassword"
+                required
+            /></label>
+            <label class="field"
+              ><span>New password</span
+              ><input
+                type="password"
+                name="newPassword"
+                autocomplete="new-password"
+                [(ngModel)]="passwordForm.newPassword"
+                minlength="8"
+                required
+            /></label>
+            <label class="field"
+              ><span>Confirm new password</span
+              ><input
+                type="password"
+                name="confirmPassword"
+                autocomplete="new-password"
+                [(ngModel)]="passwordForm.confirmPassword"
+                minlength="8"
+                required
+            /></label>
+            <button class="button button-primary" type="submit">Update my password</button>
+          </form>
+        </section>
+        }
+        <section class="demo-role-switch">
+          <div><strong>Account</strong><span>Signed in as {{ data.user().fullName }}.</span></div>
           <div class="role-actions">
-            <button (click)="useRole(data.user().role === 'admin' ? 'user' : 'admin')">
-              Switch to {{ data.user().role === 'admin' ? 'user' : 'admin' }} view
-              <ion-icon name="arrow-forward"></ion-icon></button
-            ><button (click)="logout()">Sign out <ion-icon name="log-out"></ion-icon></button>
+            <button (click)="logout()">Sign out <ion-icon name="log-out"></ion-icon></button>
           </div>
         </section>
-        } @if (page() === 'admin') {
+        } @if ( page() === 'admin' && data.authenticated() && data.identityVerified() && data.user().role === 'admin' )
+        {
         <section class="page-heading dashboard-welcome">
           <div>
             <div class="eyebrow"><span class="eyebrow-line"></span> PAWRESCUE OPERATIONS</div>
@@ -445,6 +521,8 @@
             <div class="admin-tabs">
               <button [class.active]="adminTab() === 'rescue'" (click)="adminTab.set('rescue')">
                 Rescue alerts <span>{{ activeRescues }}</span></button
+              ><button [class.active]="adminTab() === 'history'" (click)="adminTab.set('history')">
+                Report history <span>{{ adminReportHistory.length }}</span></button
               ><button [class.active]="adminTab() === 'adoptions'" (click)="adminTab.set('adoptions')">
                 Adoption requests <span>{{ pendingRequests.length }}</span>
               </button>
@@ -499,6 +577,29 @@
             </div>
             }
           </div>
+          } @else if (adminTab() === 'history') {
+          <div class="request-list">
+            @for (entry of adminReportHistory; track entry.id) {
+            <article class="request-card">
+              <span class="request-avatar"><ion-icon name="time"></ion-icon></span>
+              <div class="request-info">
+                <div class="rescue-topline">
+                  <h3>{{ entry.animalName }} <small>· {{ entry.reportedBy }}</small></h3>
+                  <span class="status-chip" [class.status-pending]="entry.status === 'Pending Rescue'"
+                    >{{ entry.status }}</span
+                  >
+                </div>
+                <p>{{ reportHistoryLabel(entry) }} · {{ timeLabel(entry.createdAt) }}</p>
+              </div>
+            </article>
+            } @empty {
+            <div class="empty-state">
+              <span class="empty-icon"><ion-icon name="time"></ion-icon></span>
+              <h3>No report history yet</h3>
+              <p>Submitted reports and rescue updates will appear here.</p>
+            </div>
+            }
+          </div>
           } @else {
           <div class="request-list">
             @for (adoption of data.adoptions(); track adoption.id) {
@@ -542,9 +643,7 @@
             <strong>Admin permissions</strong><span>Manage rescue status, medical notes and adoption approvals.</span>
           </div>
           <div class="role-actions">
-            <button (click)="useRole('user')">
-              Switch to user dashboard <ion-icon name="arrow-forward"></ion-icon></button
-            ><button (click)="logout()">Sign out <ion-icon name="log-out"></ion-icon></button>
+            <button (click)="logout()">Sign out <ion-icon name="log-out"></ion-icon></button>
           </div>
         </section>
         } @if (page() === 'login') {
@@ -562,21 +661,43 @@
             </div>
           </div>
           <form class="auth-card" (ngSubmit)="submitAuth()">
+            <div class="auth-switch account-type-switch">
+              <button
+                type="button"
+                [class.active]="loginForm.accountType === 'user'"
+                (click)="selectAccountType('user')"
+              >
+                User account
+              </button>
+              <button
+                type="button"
+                [class.active]="loginForm.accountType === 'admin'"
+                (click)="selectAccountType('admin')"
+              >
+                Admin account
+              </button>
+            </div>
             <div class="auth-switch">
               <button type="button" [class.active]="loginForm.mode === 'login'" (click)="loginForm.mode = 'login'">
                 Sign in</button
-              ><button
+              >@if (loginForm.accountType === 'user') {
+              <button
                 type="button"
                 [class.active]="loginForm.mode === 'register'"
                 (click)="loginForm.mode = 'register'"
               >
                 Create account
               </button>
+              }
             </div>
-            <h2>{{ loginForm.mode === 'login' ? 'Welcome back' : 'Join our community' }}</h2>
+            <h2>
+              {{ loginForm.mode === 'register' ? 'Join our community' : loginForm.accountType === 'admin' ? 'Admin sign
+              in' : 'Welcome back' }}
+            </h2>
             <p>
-              {{ loginForm.mode === 'login' ? 'Sign in to continue your rescue journey.' : 'Create your free adopter
-              account.' }}
+              @if (loginForm.mode === 'register') { Create your free user account. } @else if (loginForm.accountType ===
+              'admin') { Sign in with an account that has the admin role. Admin accounts cannot be created from client
+              registration. } @else { Sign in to continue your rescue journey. }
             </p>
             @if (loginForm.mode === 'register') {
             <label class="field"
@@ -604,13 +725,6 @@
             ><button class="button button-primary submit-button" type="submit">
               {{ loginForm.mode === 'login' ? 'Sign in' : 'Create account' }} <ion-icon name="arrow-forward"></ion-icon>
             </button>
-            <div class="auth-divider"><span>OR PREVIEW A DASHBOARD</span></div>
-            <div class="demo-buttons">
-              <button type="button" (click)="useRole('user')"><ion-icon name="heart"></ion-icon> User view</button
-              ><button type="button" (click)="useRole('admin')">
-                <ion-icon name="shield-checkmark"></ion-icon> Admin view
-              </button>
-            </div>
             <button type="button" class="back-link" (click)="setPage('feed')">Back to adoptable pets</button>
           </form>
         </section>

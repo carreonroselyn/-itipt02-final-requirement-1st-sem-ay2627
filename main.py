@@ -116,6 +116,7 @@ def animal_record(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
         "reportedBy": row["reporter_name"],
+        "reportedById": str(row["reported_by"]),
         "animalType": row["animal_type"],
         "photoUrl": row["photo_url"] or "",
         "address": row["address"],
@@ -147,6 +148,21 @@ def adoption_record(row: dict[str, Any]) -> dict[str, Any]:
         "submittedAt": submitted_at.isoformat(),
         "animalName": row["animal_name"],
         "animalPhoto": row["animal_photo"] or "",
+    }
+
+
+def report_history_record(row: dict[str, Any]) -> dict[str, Any]:
+    created_at = row["created_at"]
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return {
+        "id": str(row["id"]),
+        "animalId": str(row["animal_id"]),
+        "reportedBy": row["reporter_name"],
+        "animalName": row["animal_name"],
+        "eventType": row["event_type"],
+        "status": row["status"],
+        "createdAt": created_at.isoformat(),
     }
 
 
@@ -311,6 +327,32 @@ def api(
                 cursor.execute("SELECT DATABASE() AS database_name")
                 return {"data": {"status": "ok", "database": cursor.fetchone()["database_name"]}}
 
+            if action == "me" and request.method == "GET":
+                user = current_user(cursor, authorization)
+                return {"data": user_record(user)}
+
+            if action == "password" and request.method == "PATCH":
+                user = current_user(cursor, authorization)
+                current_password = require_text(payload, "currentPassword", "Current password")
+                new_password = require_text(payload, "newPassword", "New password")
+                if len(new_password) < 8:
+                    fail(422, "New password must be at least 8 characters.")
+                cursor.execute(
+                    "SELECT password_hash FROM users WHERE id = %s FOR UPDATE",
+                    (user["id"],),
+                )
+                account = cursor.fetchone()
+                if not account or not verify_password(current_password, account["password_hash"]):
+                    fail(401, "Current password is incorrect.")
+                cursor.execute(
+                    "UPDATE users SET password_hash = %s WHERE id = %s",
+                    (hash_password(new_password), user["id"]),
+                )
+                cursor.execute("DELETE FROM auth_tokens WHERE user_id = %s", (user["id"],))
+                token = create_token(cursor, user["id"])
+                connection.commit()
+                return {"data": {"token": token, "updated": True}}
+
             if action == "animals" and request.method == "GET":
                 viewer = current_user(cursor, authorization, required=False)
                 query = """SELECT a.*, u.full_name AS reporter_name
@@ -368,8 +410,31 @@ def api(
                         name,
                     ),
                 )
+                animal_id = cursor.lastrowid
+                cursor.execute(
+                    """INSERT INTO rescue_report_history
+                       (animal_id, changed_by, event_type, status)
+                       VALUES (%s, %s, 'submitted', 'Pending Rescue')""",
+                    (animal_id, user["id"]),
+                )
                 connection.commit()
-                return {"data": {"id": str(cursor.lastrowid)}}
+                return {"data": {"id": str(animal_id)}}
+
+            if action == "report-history" and request.method == "GET":
+                user = current_user(cursor, authorization)
+                query = """SELECT h.id, h.animal_id, h.event_type, h.status, h.created_at,
+                                  u.full_name AS reporter_name, a.name AS animal_name
+                           FROM rescue_report_history h
+                           JOIN animals a ON a.id = h.animal_id
+                           JOIN users u ON u.id = a.reported_by"""
+                if user["role"] == "admin":
+                    cursor.execute(query + " ORDER BY h.created_at DESC, h.id DESC")
+                else:
+                    cursor.execute(
+                        query + " WHERE a.reported_by = %s ORDER BY h.created_at DESC, h.id DESC",
+                        (user["id"],),
+                    )
+                return {"data": [report_history_record(row) for row in cursor.fetchall()]}
 
             animal_match = re.fullmatch(r"animals/(\d+)", action)
             if animal_match and request.method == "DELETE":
@@ -393,7 +458,7 @@ def api(
                 user = current_user(cursor, authorization)
                 require_admin(user)
                 animal_id = int(animal_match.group(1))
-                cursor.execute("SELECT status FROM animals WHERE id = %s", (animal_id,))
+                cursor.execute("SELECT status FROM animals WHERE id = %s FOR UPDATE", (animal_id,))
                 animal = cursor.fetchone()
                 if not animal:
                     fail(404, "Animal report not found.")
@@ -434,6 +499,13 @@ def api(
                     f"UPDATE animals SET {', '.join(updates)} WHERE id = %s",
                     values,
                 )
+                if "status" in payload:
+                    cursor.execute(
+                        """INSERT INTO rescue_report_history
+                           (animal_id, changed_by, event_type, status)
+                           VALUES (%s, %s, 'status_changed', %s)""",
+                        (animal_id, user["id"], next_status),
+                    )
                 connection.commit()
                 return {"data": {"updated": True}}
 
@@ -514,6 +586,11 @@ def api(
     except pymysql.MySQLError as error:
         connection.rollback()
         logger.exception("PawRescue database request failed")
+        if error.args and error.args[0] == 1146:
+            raise HTTPException(
+                status_code=503,
+                detail="Database schema is missing a required table. Re-import backend/petrescue_db.sql in phpMyAdmin.",
+            ) from error
         raise HTTPException(status_code=500, detail="Database request failed. Check the API log.") from error
     finally:
         connection.close()
