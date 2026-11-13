@@ -6,7 +6,7 @@ PawRescue is an Ionic Angular app backed by a FastAPI REST API and a MySQL datab
 
 1. Start **MySQL** in the XAMPP Control Panel.
 2. Open `http://localhost/phpmyadmin`.
-3. Select **Import**, choose `backend\petrescue_db.sql`, then select **Import**. This creates `petrescue_db` and the `users`, `auth_tokens`, `animals`, and `adoptions` tables.
+3. Select **Import**, choose `backend\petrescue_db.sql`, then select **Import**. This creates `petrescue_db` and the `users`, `auth_tokens`, `animals`, `rescue_report_history`, and `adoptions` tables. Re-import the SQL file on an existing installation to create the report history table.
 4. The default local XAMPP credentials are `root` with an empty password. If yours differ, set the `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASS` environment variables before starting the API. `.env.example` lists the expected values; Python does not load it automatically.
 
 The `users` table stores both adopter and admin accounts; the `role` column distinguishes `user` from `admin`. There is deliberately no built-in admin password. Register an account through the app, then grant that account admin access in phpMyAdmin:
@@ -42,7 +42,7 @@ Open the address printed by Ionic. The app is configured to call `http://127.0.0
 ## Persisted app flows
 
 - **Authentication:** Registration creates a `users` row with a hashed password and default `user` role. Login returns a bearer token whose hash and expiry are stored in `auth_tokens`.
-- **Rescue reporting:** Each authenticated user's reports are saved in `animals` with `Pending Rescue` status, location, notes, and optional uploaded photo.
+- **Rescue reporting:** Each authenticated user's reports are saved in `animals` with `Pending Rescue` status, location, notes, and optional uploaded photo. Submissions and every rescue-status change are recorded in `rescue_report_history` and shown on the client and admin dashboards.
 - **Rescue team dashboard:** Admins can transition animal status, add medical notes, and update name, age, or gender. The API checks admin role and valid workflow transitions.
 - **Animal reports:** The animal feed and dashboards use Angular Signals for reactive data binding. Reports support create, read, update, and admin-only delete through the REST API; reports with adoption history are protected from deletion.
 - **Adoptions:** Each logged-in adopter's application is saved in `adoptions`. Approving a request reserves the animal and declines other pending requests for it.

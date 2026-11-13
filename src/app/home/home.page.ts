@@ -26,7 +26,7 @@ import {
   trash,
 } from 'ionicons/icons';
 
-import type { Adoption, Animal, AnimalStatus } from '../models/animal.model';
+import type { Adoption, Animal, AnimalReportHistory, AnimalStatus } from '../models/animal.model';
 import { RescueDataService } from '../services/rescue-data.service';
 
 type AppPage = 'feed' | 'report' | 'my-dashboard' | 'admin' | 'login';
@@ -45,7 +45,7 @@ export class HomePage implements OnInit, OnDestroy {
   readonly genderFilter = signal<'All' | 'Male' | 'Female'>('All');
   readonly ageFilter = signal<'All' | 'Young' | 'Adult'>('All');
   readonly searchText = signal('');
-  readonly adminTab = signal<'rescue' | 'adoptions'>('rescue');
+  readonly adminTab = signal<'rescue' | 'history' | 'adoptions'>('rescue');
   readonly selectedAnimal = signal<Animal | null>(null);
   readonly toast = signal('');
   readonly filteredAnimals = computed(() => {
@@ -137,6 +137,27 @@ export class HomePage implements OnInit, OnDestroy {
 
   get myReports(): Animal[] {
     return this.data.animals().filter((animal) => animal.reportedBy === this.data.user().fullName);
+  }
+
+  get myReportHistory(): AnimalReportHistory[] {
+    const reportIds = new Set(this.myReports.map((animal) => animal.id));
+    return this.data.reportHistory().filter((entry) => reportIds.has(entry.animalId));
+  }
+
+  get adminReportHistory(): AnimalReportHistory[] {
+    return this.data.reportHistory();
+  }
+
+  reportHistoryLabel(entry: AnimalReportHistory): string {
+    if (entry.eventType === 'submitted') return 'Report submitted';
+    const labels: Record<AnimalStatus, string> = {
+      'Pending Rescue': 'Report pending',
+      'Rescued / In Transit': 'Rescue accepted',
+      'In Treatment': 'Treatment started',
+      'Healed & Ready': 'Cleared for adoption',
+      'Reserved for Pickup': 'Reserved for pickup',
+    };
+    return labels[entry.status];
   }
 
   get myAdoptions(): Adoption[] {

@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 
 import { environment } from '../../environments/environment';
-import type { Adoption, Animal, RescueUser } from '../models/animal.model';
+import type { Adoption, Animal, AnimalReportHistory, RescueUser } from '../models/animal.model';
 
 const demoAnimals: Animal[] = [
   {
@@ -88,6 +88,7 @@ const demoAdoptions: Adoption[] = [
 @Injectable({ providedIn: 'root' })
 export class RescueDataService {
   readonly animals = signal<Animal[]>(this.readStored('pawrescue.animals', demoAnimals));
+  readonly reportHistory = signal<AnimalReportHistory[]>(this.readStored('pawrescue.reportHistory', []));
   readonly adoptions = signal<Adoption[]>(this.readStored('pawrescue.adoptions', demoAdoptions));
   readonly user = signal<RescueUser>(
     this.readStored('pawrescue.user', {
@@ -102,15 +103,22 @@ export class RescueDataService {
   private token = localStorage.getItem('pawrescue.token');
 
   async refresh(): Promise<void> {
+    if (!this.token) {
+      this.backendOnline.set(false);
+      this.backendMessage.set('Demo mode • sign in to sync your data');
+      return;
+    }
     try {
       const animals = await this.request<Animal[]>('animals');
-      const adoptions = this.token ? await this.request<Adoption[]>('adoptions') : [];
+      const [adoptions, reportHistory] = await Promise.all([
+        this.request<Adoption[]>('adoptions'),
+        this.request<AnimalReportHistory[]>('report-history'),
+      ]);
       this.animals.set(animals);
       this.adoptions.set(adoptions);
+      this.reportHistory.set(reportHistory);
       this.backendOnline.set(true);
-      this.backendMessage.set(
-        this.token ? 'Connected to PawRescue database' : 'Connected • sign in to sync your account',
-      );
+      this.backendMessage.set('Connected to PawRescue database');
       this.persist();
     } catch (error) {
       this.backendOnline.set(false);
@@ -169,8 +177,23 @@ export class RescueDataService {
       await this.refresh();
       return;
     }
-    this.animals.update((items) => [
-      { ...report, id: `paw-${Date.now()}`, createdAt: new Date().toISOString(), status: 'Pending Rescue' },
+    const animal: Animal = {
+      ...report,
+      id: `paw-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      status: 'Pending Rescue',
+    };
+    this.animals.update((items) => [animal, ...items]);
+    this.reportHistory.update((items) => [
+      {
+        id: `history-${Date.now()}`,
+        animalId: animal.id,
+        reportedBy: animal.reportedBy,
+        animalName: animal.name,
+        eventType: 'submitted',
+        status: animal.status,
+        createdAt: animal.createdAt,
+      },
       ...items,
     ]);
     this.persist();
@@ -182,7 +205,25 @@ export class RescueDataService {
       await this.refresh();
       return;
     }
+    const previous = this.animals().find((animal) => animal.id === id);
     this.animals.update((items) => items.map((animal) => (animal.id === id ? { ...animal, ...updates } : animal)));
+    if (updates.status && previous?.status !== updates.status) {
+      const animal = this.animals().find((item) => item.id === id);
+      if (animal) {
+        this.reportHistory.update((items) => [
+          {
+            id: `history-${Date.now()}`,
+            animalId: animal.id,
+            reportedBy: animal.reportedBy,
+            animalName: animal.name,
+            eventType: 'status_changed',
+            status: animal.status,
+            createdAt: new Date().toISOString(),
+          },
+          ...items,
+        ]);
+      }
+    }
     this.persist();
   }
 
@@ -260,6 +301,7 @@ export class RescueDataService {
 
   private persist(): void {
     localStorage.setItem('pawrescue.animals', JSON.stringify(this.animals()));
+    localStorage.setItem('pawrescue.reportHistory', JSON.stringify(this.reportHistory()));
     localStorage.setItem('pawrescue.adoptions', JSON.stringify(this.adoptions()));
     localStorage.setItem('pawrescue.user', JSON.stringify(this.user()));
   }

@@ -18,6 +18,16 @@ export interface Animal {
   createdAt: string;
 }
 
+export interface AnimalReportHistory {
+  id: string;
+  animalId: string;
+  reportedBy: string;
+  animalName: string;
+  eventType: 'submitted' | 'status_changed';
+  status: AnimalStatus;
+  createdAt: string;
+}
+
 export interface Adoption {
   id: string;
   animalId: string;

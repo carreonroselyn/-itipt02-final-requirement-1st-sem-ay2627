@@ -150,6 +150,21 @@ def adoption_record(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def report_history_record(row: dict[str, Any]) -> dict[str, Any]:
+    created_at = row["created_at"]
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return {
+        "id": str(row["id"]),
+        "animalId": str(row["animal_id"]),
+        "reportedBy": row["reporter_name"],
+        "animalName": row["animal_name"],
+        "eventType": row["event_type"],
+        "status": row["status"],
+        "createdAt": created_at.isoformat(),
+    }
+
+
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 310_000)
@@ -368,8 +383,31 @@ def api(
                         name,
                     ),
                 )
+                animal_id = cursor.lastrowid
+                cursor.execute(
+                    """INSERT INTO rescue_report_history
+                       (animal_id, changed_by, event_type, status)
+                       VALUES (%s, %s, 'submitted', 'Pending Rescue')""",
+                    (animal_id, user["id"]),
+                )
                 connection.commit()
-                return {"data": {"id": str(cursor.lastrowid)}}
+                return {"data": {"id": str(animal_id)}}
+
+            if action == "report-history" and request.method == "GET":
+                user = current_user(cursor, authorization)
+                query = """SELECT h.id, h.animal_id, h.event_type, h.status, h.created_at,
+                                  u.full_name AS reporter_name, a.name AS animal_name
+                           FROM rescue_report_history h
+                           JOIN animals a ON a.id = h.animal_id
+                           JOIN users u ON u.id = a.reported_by"""
+                if user["role"] == "admin":
+                    cursor.execute(query + " ORDER BY h.created_at DESC, h.id DESC")
+                else:
+                    cursor.execute(
+                        query + " WHERE a.reported_by = %s ORDER BY h.created_at DESC, h.id DESC",
+                        (user["id"],),
+                    )
+                return {"data": [report_history_record(row) for row in cursor.fetchall()]}
 
             animal_match = re.fullmatch(r"animals/(\d+)", action)
             if animal_match and request.method == "DELETE":
@@ -393,7 +431,7 @@ def api(
                 user = current_user(cursor, authorization)
                 require_admin(user)
                 animal_id = int(animal_match.group(1))
-                cursor.execute("SELECT status FROM animals WHERE id = %s", (animal_id,))
+                cursor.execute("SELECT status FROM animals WHERE id = %s FOR UPDATE", (animal_id,))
                 animal = cursor.fetchone()
                 if not animal:
                     fail(404, "Animal report not found.")
@@ -434,6 +472,13 @@ def api(
                     f"UPDATE animals SET {', '.join(updates)} WHERE id = %s",
                     values,
                 )
+                if "status" in payload:
+                    cursor.execute(
+                        """INSERT INTO rescue_report_history
+                           (animal_id, changed_by, event_type, status)
+                           VALUES (%s, %s, 'status_changed', %s)""",
+                        (animal_id, user["id"], next_status),
+                    )
                 connection.commit()
                 return {"data": {"updated": True}}
 

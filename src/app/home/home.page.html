@@ -401,6 +401,28 @@
             </button>
           </article>
         </section>
+        <section class="content-card">
+          <div class="content-card-header">
+            <div>
+              <h2>Report history</h2>
+              <p>Updates from the rescue team for your reports.</p>
+            </div>
+          </div>
+          @for (entry of myReportHistory; track entry.id) {
+          <div class="application-row">
+            <span class="application-paw"><ion-icon name="time"></ion-icon></span>
+            <div class="activity-copy">
+              <strong>{{ entry.animalName }} · {{ reportHistoryLabel(entry) }}</strong>
+              <small>{{ timeLabel(entry.createdAt) }}</small>
+            </div>
+            <span class="status-chip" [class.status-pending]="entry.status === 'Pending Rescue'"
+              >{{ entry.status }}</span
+            >
+          </div>
+          } @empty {
+          <div class="empty-inline"><ion-icon name="time"></ion-icon><span>Report updates will appear here.</span></div>
+          }
+        </section>
         <section class="demo-role-switch">
           <div>
             <strong>Viewing the app as {{ data.user().role }}.</strong
@@ -445,6 +467,8 @@
             <div class="admin-tabs">
               <button [class.active]="adminTab() === 'rescue'" (click)="adminTab.set('rescue')">
                 Rescue alerts <span>{{ activeRescues }}</span></button
+              ><button [class.active]="adminTab() === 'history'" (click)="adminTab.set('history')">
+                Report history <span>{{ adminReportHistory.length }}</span></button
               ><button [class.active]="adminTab() === 'adoptions'" (click)="adminTab.set('adoptions')">
                 Adoption requests <span>{{ pendingRequests.length }}</span>
               </button>
@@ -496,6 +520,29 @@
             <div class="empty-state">
               <span class="empty-icon"><ion-icon name="checkmark-circle"></ion-icon></span>
               <h3>All rescue alerts are up to date</h3>
+            </div>
+            }
+          </div>
+          } @else if (adminTab() === 'history') {
+          <div class="request-list">
+            @for (entry of adminReportHistory; track entry.id) {
+            <article class="request-card">
+              <span class="request-avatar"><ion-icon name="time"></ion-icon></span>
+              <div class="request-info">
+                <div class="rescue-topline">
+                  <h3>{{ entry.animalName }} <small>· {{ entry.reportedBy }}</small></h3>
+                  <span class="status-chip" [class.status-pending]="entry.status === 'Pending Rescue'"
+                    >{{ entry.status }}</span
+                  >
+                </div>
+                <p>{{ reportHistoryLabel(entry) }} · {{ timeLabel(entry.createdAt) }}</p>
+              </div>
+            </article>
+            } @empty {
+            <div class="empty-state">
+              <span class="empty-icon"><ion-icon name="time"></ion-icon></span>
+              <h3>No report history yet</h3>
+              <p>Submitted reports and rescue updates will appear here.</p>
             </div>
             }
           </div>
