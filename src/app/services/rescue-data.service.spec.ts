@@ -21,40 +21,53 @@ describe('RescueDataService', () => {
     const fetch = vi.spyOn(globalThis, 'fetch');
 
     await service.refresh();
+    await service.refresh();
 
     expect(fetch).not.toHaveBeenCalled();
     expect(service.animals()).toContainEqual(pendingReport);
   });
 
-  it('keeps submission and rescue status updates in report history', async () => {
+  it('clears stale demo-admin role and reports when there is no server session', async () => {
+    localStorage.setItem(
+      'pawrescue.user',
+      JSON.stringify({
+        id: 'demo-admin',
+        fullName: 'Rescue Team',
+        email: 'admin@example.com',
+        role: 'admin',
+      }),
+    );
+    localStorage.setItem('pawrescue.animals', JSON.stringify([{ id: 'private-report' }]));
     const service = new RescueDataService();
-    await service.createReport({
-      reportedBy: 'Client',
-      animalType: 'Dog',
-      photoUrl: '',
-      address: 'Main Street',
-      latitude: null,
-      longitude: null,
-      conditionNotes: 'Needs help',
-      medicalNotes: '',
-      name: 'New dog rescue',
-      age: null,
-      gender: 'Unknown',
-    });
-    const report = service.animals()[0];
 
-    expect(service.reportHistory()[0]).toMatchObject({
-      animalId: report.id,
-      eventType: 'submitted',
-      status: 'Pending Rescue',
-    });
+    await service.refresh();
 
-    await service.updateAnimal(report.id, { status: 'Rescued / In Transit' });
+    expect(service.user().role).toBe('user');
+    expect(service.animals().some((animal) => animal.id === 'private-report')).toBe(false);
+  });
 
-    expect(service.reportHistory()[0]).toMatchObject({
-      animalId: report.id,
-      eventType: 'status_changed',
-      status: 'Rescued / In Transit',
-    });
+  it('does not save reports locally when the user is signed out', async () => {
+    const service = new RescueDataService();
+    const reportsBefore = service.animals();
+    const historyBefore = service.reportHistory();
+
+    await expect(
+      service.createReport({
+        reportedBy: 'Client',
+        animalType: 'Dog',
+        photoUrl: '',
+        address: 'Main Street',
+        latitude: null,
+        longitude: null,
+        conditionNotes: 'Needs help',
+        medicalNotes: '',
+        name: 'New dog rescue',
+        age: null,
+        gender: 'Unknown',
+      }),
+    ).rejects.toThrow('Mag-sign in bago magpadala ng report.');
+
+    expect(service.animals()).toEqual(reportsBefore);
+    expect(service.reportHistory()).toEqual(historyBefore);
   });
 });
