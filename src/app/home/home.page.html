@@ -477,6 +477,13 @@
                 >
                 }
                 <button class="text-button edit-profile" (click)="editAnimalProfile(animal)">Edit pet profile</button>
+                <button
+                  class="button button-outline rescue-action delete-action"
+                  type="button"
+                  (click)="deleteAnimal(animal)"
+                >
+                  <ion-icon name="trash"></ion-icon> Delete report
+                </button>
                 @if (animal.status !== 'Healed & Ready' && animal.status !== 'Reserved for Pickup') {
                 <button class="button button-primary rescue-action" (click)="advanceAnimal(animal)">
                   {{ animal.status === 'Pending Rescue' ? 'Accept rescue' : animal.status === 'Rescued / In Transit' ?

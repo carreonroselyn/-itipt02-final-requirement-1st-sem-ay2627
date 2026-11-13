@@ -23,6 +23,7 @@ import {
   shieldCheckmark,
   sparkles,
   time,
+  trash,
 } from 'ionicons/icons';
 
 import type { Adoption, Animal, AnimalStatus } from '../models/animal.model';
@@ -97,6 +98,7 @@ export class HomePage implements OnInit, OnDestroy {
       shieldCheckmark,
       sparkles,
       time,
+      trash,
     });
   }
 
@@ -332,6 +334,16 @@ export class HomePage implements OnInit, OnDestroy {
         gender: genderInput as Animal['gender'],
       });
       this.showToast('Pet profile updated.');
+    } catch (error) {
+      this.showToast(this.errorMessage(error));
+    }
+  }
+
+  async deleteAnimal(animal: Animal): Promise<void> {
+    if (!window.confirm(`Delete the report for ${animal.name}? This cannot be undone.`)) return;
+    try {
+      await this.data.deleteAnimal(animal.id);
+      this.showToast(`${animal.name}'s report deleted.`);
     } catch (error) {
       this.showToast(this.errorMessage(error));
     }

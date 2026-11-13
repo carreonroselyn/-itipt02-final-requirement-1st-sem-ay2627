@@ -38,7 +38,7 @@ app.add_middleware(
         "http://localhost:5173",
     ],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -260,6 +260,7 @@ def health() -> dict[str, str]:
 @app.get("/")
 @app.post("/")
 @app.patch("/")
+@app.delete("/")
 def api(
     request: Request,
     action: str = Query(...),
@@ -371,6 +372,23 @@ def api(
                 return {"data": {"id": str(cursor.lastrowid)}}
 
             animal_match = re.fullmatch(r"animals/(\d+)", action)
+            if animal_match and request.method == "DELETE":
+                user = current_user(cursor, authorization)
+                require_admin(user)
+                animal_id = int(animal_match.group(1))
+                cursor.execute("SELECT id FROM animals WHERE id = %s FOR UPDATE", (animal_id,))
+                if not cursor.fetchone():
+                    fail(404, "Animal report not found.")
+                cursor.execute(
+                    "SELECT 1 FROM adoptions WHERE animal_id = %s LIMIT 1",
+                    (animal_id,),
+                )
+                if cursor.fetchone():
+                    fail(409, "Animal reports with adoption history cannot be deleted.")
+                cursor.execute("DELETE FROM animals WHERE id = %s", (animal_id,))
+                connection.commit()
+                return {"data": {"deleted": True}}
+
             if animal_match and request.method == "PATCH":
                 user = current_user(cursor, authorization)
                 require_admin(user)

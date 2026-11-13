@@ -186,6 +186,19 @@ export class RescueDataService {
     this.persist();
   }
 
+  async deleteAnimal(id: string): Promise<void> {
+    if (this.token) {
+      await this.request(`animals/${encodeURIComponent(id)}`, undefined, 'DELETE');
+      await this.refresh();
+      return;
+    }
+    if (this.adoptions().some((adoption) => adoption.animalId === id)) {
+      throw new Error('Animal reports with adoption history cannot be deleted.');
+    }
+    this.animals.update((items) => items.filter((animal) => animal.id !== id));
+    this.persist();
+  }
+
   async createAdoption(adoption: Omit<Adoption, 'id' | 'submittedAt' | 'requestStatus'>): Promise<void> {
     if (this.token) {
       await this.request('adoptions', adoption, 'POST');
@@ -228,7 +241,7 @@ export class RescueDataService {
   private async request<T>(
     action: string,
     body?: unknown,
-    method: 'GET' | 'POST' | 'PATCH' = body ? 'POST' : 'GET',
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = body ? 'POST' : 'GET',
   ): Promise<T> {
     const response = await fetch(`${environment.apiUrl}?action=${action}`, {
       method,

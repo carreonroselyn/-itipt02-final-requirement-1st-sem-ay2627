@@ -6,7 +6,7 @@ require_once __DIR__ . '/config.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Authorization, Content-Type');
-header('Access-Control-Allow-Methods: GET, POST, PATCH, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -180,6 +180,28 @@ try {
         $values[] = $id;
         $pdo->prepare('UPDATE animals SET ' . implode(', ', $sets) . ' WHERE id = ?')->execute($values);
         respond(200, ['data' => ['updated' => true]]);
+    }
+
+    if ($method === 'DELETE' && preg_match('#^animals/(\d+)$#', $action, $match)) {
+        $user = current_user($pdo);
+        require_admin($user);
+        $id = (int) $match[1];
+        $pdo->beginTransaction();
+        $animalQuery = $pdo->prepare('SELECT id FROM animals WHERE id = ? FOR UPDATE');
+        $animalQuery->execute([$id]);
+        if (!$animalQuery->fetch()) {
+            $pdo->rollBack();
+            respond(404, ['error' => 'Animal report not found.']);
+        }
+        $adoptionQuery = $pdo->prepare('SELECT 1 FROM adoptions WHERE animal_id = ? LIMIT 1');
+        $adoptionQuery->execute([$id]);
+        if ($adoptionQuery->fetch()) {
+            $pdo->rollBack();
+            respond(409, ['error' => 'Animal reports with adoption history cannot be deleted.']);
+        }
+        $pdo->prepare('DELETE FROM animals WHERE id = ?')->execute([$id]);
+        $pdo->commit();
+        respond(200, ['data' => ['deleted' => true]]);
     }
 
     if ($method === 'POST' && $action === 'adoptions') {

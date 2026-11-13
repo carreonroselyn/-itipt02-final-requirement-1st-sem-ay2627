@@ -44,6 +44,7 @@ Open the address printed by Ionic. The app is configured to call `http://127.0.0
 - **Authentication:** Registration creates a `users` row with a hashed password and default `user` role. Login returns a bearer token whose hash and expiry are stored in `auth_tokens`.
 - **Rescue reporting:** Each authenticated user's reports are saved in `animals` with `Pending Rescue` status, location, notes, and optional uploaded photo.
 - **Rescue team dashboard:** Admins can transition animal status, add medical notes, and update name, age, or gender. The API checks admin role and valid workflow transitions.
+- **Animal reports:** The animal feed and dashboards use Angular Signals for reactive data binding. Reports support create, read, update, and admin-only delete through the REST API; reports with adoption history are protected from deletion.
 - **Adoptions:** Each logged-in adopter's application is saved in `adoptions`. Approving a request reserves the animal and declines other pending requests for it.
 - **Public feed:** The API returns healed-and-ready animals publicly. A signed-in user can also see their own reports; admins can see all reports. The app polls the database every 30 seconds.
 - **Photos:** API uploads are written to `backend\uploads`; only validated JPEG, PNG, and WebP files up to 2.5 MB are accepted.
