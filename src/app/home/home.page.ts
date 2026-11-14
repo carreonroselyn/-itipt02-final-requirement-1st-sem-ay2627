@@ -32,6 +32,7 @@ import { RescueDataService } from '../services/rescue-data.service';
 type AppPage = 'feed' | 'report' | 'my-reports' | 'admin' | 'login';
 type FeedCategory = 'All' | 'Dogs' | 'Cats' | 'Others';
 type AccountType = 'user' | 'admin';
+type AdminRescueFilter = 'all' | 'pending' | 'treatment' | 'ready';
 
 @Component({
   selector: 'app-home',
@@ -47,6 +48,7 @@ export class HomePage implements OnInit, OnDestroy {
   readonly ageFilter = signal<'All' | 'Young' | 'Adult'>('All');
   readonly searchText = signal('');
   readonly adminTab = signal<'rescue' | 'history' | 'adoptions'>('rescue');
+  readonly adminFilter = signal<AdminRescueFilter>('all');
   readonly selectedAnimal = signal<Animal | null>(null);
   readonly toast = signal('');
   readonly filteredAnimals = computed(() => {
@@ -204,6 +206,52 @@ export class HomePage implements OnInit, OnDestroy {
 
   get adminAnimals(): Animal[] {
     return [...this.data.animals()].sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt));
+  }
+
+  get filteredAdminAnimals(): Animal[] {
+    const animals = this.adminAnimals;
+    switch (this.adminFilter()) {
+      case 'pending':
+        return animals.filter((animal) => animal.status === 'Pending Rescue');
+      case 'treatment':
+        return animals.filter((animal) => animal.status === 'In Treatment' || animal.status === 'Rescued / In Transit');
+      case 'ready':
+        return animals.filter((animal) => animal.status === 'Healed & Ready');
+      default:
+        return animals;
+    }
+  }
+
+  get adminFilterLabel(): string {
+    return {
+      all: 'All rescue reports',
+      pending: 'Pending rescue alerts',
+      treatment: 'Animals in treatment',
+      ready: 'Ready for adoption',
+    }[this.adminFilter()];
+  }
+
+  get adminFilterEmptyMessage(): string {
+    return {
+      all: 'All rescue alerts are up to date',
+      pending: 'No pending rescue alerts',
+      treatment: 'No animals in treatment',
+      ready: 'No animals ready for adoption',
+    }[this.adminFilter()];
+  }
+
+  selectDashboardMetric(metric: Exclude<AdminRescueFilter, 'all'> | 'adoptions'): void {
+    if (metric === 'adoptions') {
+      this.adminTab.set('adoptions');
+      return;
+    }
+    this.adminFilter.set(metric);
+    this.adminTab.set('rescue');
+  }
+
+  selectAdminTab(tab: 'rescue' | 'history' | 'adoptions'): void {
+    this.adminTab.set(tab);
+    if (tab === 'rescue') this.adminFilter.set('all');
   }
 
   setPage(page: AppPage): void {

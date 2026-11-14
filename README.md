@@ -28,6 +28,8 @@ python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 `main.py` is the ASGI module used by `uvicorn main:app`. Check `http://127.0.0.1:8000/health` for the database connection status and `http://127.0.0.1:8000/docs` for the API docs. If the database is unavailable, the API reports a clear MySQL/XAMPP error rather than pretending data was saved.
 
+The backend is an API, not the app's web page. Do not open `http://0.0.0.0:8000/` in a browser; `0.0.0.0` is only the server's listen address. Open the Ionic development URL printed by `npm start` (usually `http://localhost:4200/`) in a second terminal instead.
+
 ## 3. Start the Ionic app
 
 In a second PowerShell window:

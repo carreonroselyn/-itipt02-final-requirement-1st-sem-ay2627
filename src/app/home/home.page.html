@@ -499,39 +499,62 @@
           <span class="admin-badge"><ion-icon name="shield-checkmark"></ion-icon> ADMIN VIEW</span>
         </section>
         <section class="dashboard-metrics">
-          <article>
+          <button
+            type="button"
+            [class.is-selected]="adminTab() === 'rescue' && adminFilter() === 'pending'"
+            [attr.aria-pressed]="adminTab() === 'rescue' && adminFilter() === 'pending'"
+            (click)="selectDashboardMetric('pending')"
+          >
             <span class="metric-icon peach"><ion-icon name="alert-circle"></ion-icon></span>
             <div><small>Pending rescue alerts</small><strong>{{ pendingAnimalCount }}</strong></div>
-          </article>
-          <article>
+          </button>
+          <button
+            type="button"
+            [class.is-selected]="adminTab() === 'rescue' && adminFilter() === 'treatment'"
+            [attr.aria-pressed]="adminTab() === 'rescue' && adminFilter() === 'treatment'"
+            (click)="selectDashboardMetric('treatment')"
+          >
             <span class="metric-icon blue"><ion-icon name="paw"></ion-icon></span>
             <div><small>Animals in treatment</small><strong>{{ treatmentAnimalCount }}</strong></div>
-          </article>
-          <article>
+          </button>
+          <button
+            type="button"
+            [class.is-selected]="adminTab() === 'adoptions'"
+            [attr.aria-pressed]="adminTab() === 'adoptions'"
+            (click)="selectDashboardMetric('adoptions')"
+          >
             <span class="metric-icon mint"><ion-icon name="heart"></ion-icon></span>
             <div><small>Adoption requests</small><strong>{{ pendingRequests.length }}</strong></div>
-          </article>
-          <article>
+          </button>
+          <button
+            type="button"
+            [class.is-selected]="adminTab() === 'rescue' && adminFilter() === 'ready'"
+            [attr.aria-pressed]="adminTab() === 'rescue' && adminFilter() === 'ready'"
+            (click)="selectDashboardMetric('ready')"
+          >
             <span class="metric-icon lilac"><ion-icon name="checkmark-circle"></ion-icon></span>
             <div><small>Ready for adoption</small><strong>{{ readyAnimalCount }}</strong></div>
-          </article>
+          </button>
         </section>
         <section class="content-card admin-card">
           <div class="admin-toolbar">
             <div class="admin-tabs">
-              <button [class.active]="adminTab() === 'rescue'" (click)="adminTab.set('rescue')">
+              <button [class.active]="adminTab() === 'rescue'" (click)="selectAdminTab('rescue')">
                 Rescue alerts <span>{{ activeRescues }}</span></button
-              ><button [class.active]="adminTab() === 'history'" (click)="adminTab.set('history')">
+              ><button [class.active]="adminTab() === 'history'" (click)="selectAdminTab('history')">
                 Report history <span>{{ adminReportHistory.length }}</span></button
-              ><button [class.active]="adminTab() === 'adoptions'" (click)="adminTab.set('adoptions')">
+              ><button [class.active]="adminTab() === 'adoptions'" (click)="selectAdminTab('adoptions')">
                 Adoption requests <span>{{ pendingRequests.length }}</span>
               </button>
             </div>
-            <span class="sort-label"><ion-icon name="time"></ion-icon> Newest first</span>
+            <span class="sort-label"
+              ><ion-icon name="time"></ion-icon>
+              {{ adminTab() === 'rescue' ? adminFilterLabel : 'Newest first' }}</span
+            >
           </div>
           @if (adminTab() === 'rescue') {
           <div class="rescue-list">
-            @for (animal of adminAnimals; track animal.id) {
+            @for (animal of filteredAdminAnimals; track animal.id) {
             <article class="rescue-card">
               <img [src]="photo(animal)" [alt]="animal.name" />
               <div class="rescue-details">
@@ -573,7 +596,7 @@
             } @empty {
             <div class="empty-state">
               <span class="empty-icon"><ion-icon name="checkmark-circle"></ion-icon></span>
-              <h3>All rescue alerts are up to date</h3>
+              <h3>{{ adminFilterEmptyMessage }}</h3>
             </div>
             }
           </div>

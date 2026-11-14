@@ -161,4 +161,28 @@ describe('HomePage', () => {
     expect(navigationText).not.toContain('Report an animal');
     expect(navigationText).not.toContain('My reports');
   });
+
+  it('filters rescue dashboard metrics to their matching animal queues', () => {
+    component.selectDashboardMetric('pending');
+    expect(component.filteredAdminAnimals.length).toBeGreaterThan(0);
+    expect(component.filteredAdminAnimals.every((animal) => animal.status === 'Pending Rescue')).toBe(true);
+
+    component.selectDashboardMetric('treatment');
+    expect(component.filteredAdminAnimals.length).toBeGreaterThan(0);
+    expect(
+      component.filteredAdminAnimals.every(
+        (animal) => animal.status === 'In Treatment' || animal.status === 'Rescued / In Transit',
+      ),
+    ).toBe(true);
+
+    component.selectDashboardMetric('ready');
+    expect(component.filteredAdminAnimals.length).toBeGreaterThan(0);
+    expect(component.filteredAdminAnimals.every((animal) => animal.status === 'Healed & Ready')).toBe(true);
+  });
+
+  it('opens adoption requests from the dashboard metric', () => {
+    component.selectDashboardMetric('adoptions');
+
+    expect(component.adminTab()).toBe('adoptions');
+  });
 });
