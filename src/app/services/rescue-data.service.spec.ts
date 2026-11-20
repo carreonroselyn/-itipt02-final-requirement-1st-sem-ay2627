@@ -70,4 +70,28 @@ describe('RescueDataService', () => {
     expect(service.animals()).toEqual(reportsBefore);
     expect(service.reportHistory()).toEqual(historyBefore);
   });
+
+  it('deletes an animal and its related adoption and report history records', async () => {
+    const service = new RescueDataService();
+    const animalId = service.adoptions()[0].animalId;
+    service.reportHistory.set([
+      {
+        id: 'history-1',
+        animalId,
+        reportedBy: 'Mika Santos',
+        animalName: 'Chloe',
+        eventType: 'submitted',
+        status: 'Pending Rescue',
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    await service.deleteAnimal(animalId);
+
+    expect(service.animals().some((animal) => animal.id === animalId)).toBe(false);
+    expect(service.adoptions().some((adoption) => adoption.animalId === animalId)).toBe(false);
+    expect(service.reportHistory().some((entry) => entry.animalId === animalId)).toBe(false);
+    expect(JSON.parse(localStorage.getItem('pawrescue.adoptions') ?? '[]')).toEqual(service.adoptions());
+    expect(JSON.parse(localStorage.getItem('pawrescue.reportHistory') ?? '[]')).toEqual(service.reportHistory());
+  });
 });

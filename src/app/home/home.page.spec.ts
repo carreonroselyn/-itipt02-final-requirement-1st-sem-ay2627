@@ -1,8 +1,9 @@
 import type { ComponentFixture } from '@angular/core/testing';
 import { TestBed } from '@angular/core/testing';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 
 import { HomePage } from './home.page';
+import { beforeEach, describe, it } from 'node:test';
 
 describe('HomePage', () => {
   let component: HomePage;

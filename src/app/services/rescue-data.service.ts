@@ -237,10 +237,9 @@ export class RescueDataService {
       await this.refresh();
       return;
     }
-    if (this.adoptions().some((adoption) => adoption.animalId === id)) {
-      throw new Error('Animal reports with adoption history cannot be deleted.');
-    }
     this.animals.update((items) => items.filter((animal) => animal.id !== id));
+    this.adoptions.update((items) => items.filter((adoption) => adoption.animalId !== id));
+    this.reportHistory.update((items) => items.filter((entry) => entry.animalId !== id));
     this.persist();
   }
 

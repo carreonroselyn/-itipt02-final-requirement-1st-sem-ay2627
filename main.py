@@ -445,11 +445,13 @@ def api(
                 if not cursor.fetchone():
                     fail(404, "Animal report not found.")
                 cursor.execute(
-                    "SELECT 1 FROM adoptions WHERE animal_id = %s LIMIT 1",
+                    "DELETE FROM adoptions WHERE animal_id = %s",
                     (animal_id,),
                 )
-                if cursor.fetchone():
-                    fail(409, "Animal reports with adoption history cannot be deleted.")
+                cursor.execute(
+                    "DELETE FROM rescue_report_history WHERE animal_id = %s",
+                    (animal_id,),
+                )
                 cursor.execute("DELETE FROM animals WHERE id = %s", (animal_id,))
                 connection.commit()
                 return {"data": {"deleted": True}}
