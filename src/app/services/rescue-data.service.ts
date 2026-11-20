@@ -1,4 +1,6 @@
-import { Injectable, signal } from '@angular/core';
+import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
+import { inject, Injectable, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { environment } from '../../environments/environment';
 import type { Adoption, Animal, AnimalReportHistory, RescueUser } from '../models/animal.model';
@@ -87,28 +89,35 @@ const demoAdoptions: Adoption[] = [
 
 @Injectable({ providedIn: 'root' })
 export class RescueDataService {
-  readonly animals = signal<Animal[]>(this.readStored('pawrescue.animals', demoAnimals));
-  readonly reportHistory = signal<AnimalReportHistory[]>(this.readStored('pawrescue.reportHistory', []));
-  readonly adoptions = signal<Adoption[]>(this.readStored('pawrescue.adoptions', demoAdoptions));
-  readonly user = signal<RescueUser>(
-    this.readStored('pawrescue.user', {
-      id: 'demo-user',
-      fullName: 'Mika Santos',
-      email: 'mika@example.com',
-      role: 'user',
-    }),
+  private readonly http = inject(HttpClient);
+  private token = localStorage.getItem('pawrescue.token');
+  readonly authenticated = signal(Boolean(this.token));
+  readonly identityVerified = signal(false);
+  readonly animals = signal<Animal[]>(this.token ? [] : this.readStored('pawrescue.animals', demoAnimals));
+  readonly reportHistory = signal<AnimalReportHistory[]>(
+    this.token ? [] : this.readStored('pawrescue.reportHistory', []),
   );
+  readonly adoptions = signal<Adoption[]>(this.token ? [] : this.readStored('pawrescue.adoptions', demoAdoptions));
+  readonly user = signal<RescueUser>({
+    id: 'demo-user',
+    fullName: 'Mika Santos',
+    email: 'mika@example.com',
+    role: 'user',
+  });
   readonly backendOnline = signal(false);
   readonly backendMessage = signal('Demo mode • start FastAPI and XAMPP MySQL to sync your data');
-  private token = localStorage.getItem('pawrescue.token');
+  private demoDataSanitized = false;
 
   async refresh(): Promise<void> {
     if (!this.token) {
+      if (!this.demoDataSanitized) this.useDemoUser();
       this.backendOnline.set(false);
-      this.backendMessage.set('Demo mode • sign in to sync your data');
+      this.backendMessage.set('Demo user • sign in to sync your data');
       return;
     }
     try {
+      this.user.set(await this.request<RescueUser>('me'));
+      this.identityVerified.set(true);
       const animals = await this.request<Animal[]>('animals');
       const [adoptions, reportHistory] = await Promise.all([
         this.request<Adoption[]>('adoptions'),
@@ -138,9 +147,11 @@ export class RescueDataService {
     });
     this.token = result.token;
     localStorage.setItem('pawrescue.token', result.token);
+    this.authenticated.set(true);
+    this.identityVerified.set(true);
+    this.clearAccountData();
     this.user.set(result.user);
     this.persist();
-    await this.refresh();
   }
 
   async register(fullName: string, email: string, password: string): Promise<void> {
@@ -151,52 +162,48 @@ export class RescueDataService {
     });
     this.token = result.token;
     localStorage.setItem('pawrescue.token', result.token);
+    this.authenticated.set(true);
+    this.identityVerified.set(true);
+    this.clearAccountData();
     this.user.set(result.user);
     this.backendOnline.set(true);
     this.backendMessage.set('Connected to PawRescue database');
     this.persist();
+  }
+
+  useDemoUser(): void {
+    this.demoDataSanitized = true;
+    this.token = null;
+    this.authenticated.set(false);
+    this.identityVerified.set(false);
+    localStorage.removeItem('pawrescue.token');
+    this.animals.set(demoAnimals);
+    this.reportHistory.set([]);
+    this.adoptions.set(demoAdoptions);
+    this.user.set({
+      id: 'demo-user',
+      fullName: 'Mika Santos',
+      email: 'mika@example.com',
+      role: 'user',
+    });
+    this.backendOnline.set(false);
+    this.backendMessage.set('Demo user • start FastAPI and XAMPP MySQL to use the database');
+    this.persist();
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const result = await this.request<{ token: string }>('password', { currentPassword, newPassword }, 'PATCH');
+    this.token = result.token;
+    localStorage.setItem('pawrescue.token', result.token);
     await this.refresh();
   }
 
-  useDemoRole(role: 'user' | 'admin'): void {
-    const user: RescueUser =
-      role === 'admin'
-        ? { id: 'demo-admin', fullName: 'Rescue Team', email: 'admin@pawrescue.local', role }
-        : { id: 'demo-user', fullName: 'Mika Santos', email: 'mika@example.com', role };
-    this.token = null;
-    localStorage.removeItem('pawrescue.token');
-    this.user.set(user);
-    this.backendOnline.set(false);
-    this.backendMessage.set(`Demo ${role} • start FastAPI and XAMPP MySQL to use the database`);
-    this.persist();
-  }
-
   async createReport(report: Omit<Animal, 'id' | 'createdAt' | 'status'>): Promise<void> {
-    if (this.token) {
-      await this.request('animals', report, 'POST');
-      await this.refresh();
-      return;
+    if (!this.token) {
+      throw new Error('Mag-sign in bago magpadala ng report.');
     }
-    const animal: Animal = {
-      ...report,
-      id: `paw-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      status: 'Pending Rescue',
-    };
-    this.animals.update((items) => [animal, ...items]);
-    this.reportHistory.update((items) => [
-      {
-        id: `history-${Date.now()}`,
-        animalId: animal.id,
-        reportedBy: animal.reportedBy,
-        animalName: animal.name,
-        eventType: 'submitted',
-        status: animal.status,
-        createdAt: animal.createdAt,
-      },
-      ...items,
-    ]);
-    this.persist();
+    await this.request('animals', report, 'POST');
+    await this.refresh();
   }
 
   async updateAnimal(id: string, updates: Partial<Animal>): Promise<void> {
@@ -233,10 +240,9 @@ export class RescueDataService {
       await this.refresh();
       return;
     }
-    if (this.adoptions().some((adoption) => adoption.animalId === id)) {
-      throw new Error('Animal reports with adoption history cannot be deleted.');
-    }
     this.animals.update((items) => items.filter((animal) => animal.id !== id));
+    this.adoptions.update((items) => items.filter((adoption) => adoption.animalId !== id));
+    this.reportHistory.update((items) => items.filter((entry) => entry.animalId !== id));
     this.persist();
   }
 
@@ -274,9 +280,7 @@ export class RescueDataService {
   }
 
   logout(): void {
-    this.token = null;
-    localStorage.removeItem('pawrescue.token');
-    this.useDemoRole('user');
+    this.useDemoUser();
   }
 
   private async request<T>(
@@ -284,19 +288,26 @@ export class RescueDataService {
     body?: unknown,
     method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = body ? 'POST' : 'GET',
   ): Promise<T> {
-    const response = await fetch(`${environment.apiUrl}?action=${action}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-    const result = (await response.json()) as { data?: T; error?: string; detail?: string };
-    if (!response.ok) {
-      throw new Error(result.error ?? result.detail ?? 'Hindi nakumpleto ang request.');
+    try {
+      const result = await firstValueFrom(
+        this.http.request<{ data?: T }>(method, environment.apiUrl, {
+          params: new HttpParams().set('action', action),
+          headers: new HttpHeaders({
+            'Content-Type': 'application/json',
+            ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+          }),
+          body,
+        }),
+      );
+      return result.data as T;
+    } catch (error) {
+      if (error instanceof HttpErrorResponse) {
+        if (error.status === 0) throw new TypeError('Failed to connect to the PawRescue API.', { cause: error });
+        const result = error.error as { error?: string; detail?: string } | null;
+        throw new Error(result?.error ?? result?.detail ?? 'Hindi nakumpleto ang request.', { cause: error });
+      }
+      throw error;
     }
-    return result.data as T;
   }
 
   private persist(): void {
@@ -304,6 +315,12 @@ export class RescueDataService {
     localStorage.setItem('pawrescue.reportHistory', JSON.stringify(this.reportHistory()));
     localStorage.setItem('pawrescue.adoptions', JSON.stringify(this.adoptions()));
     localStorage.setItem('pawrescue.user', JSON.stringify(this.user()));
+  }
+
+  private clearAccountData(): void {
+    this.animals.set([]);
+    this.reportHistory.set([]);
+    this.adoptions.set([]);
   }
 
   private readStored<T>(key: string, fallback: T): T {

@@ -74,3 +74,5 @@ Thumbs.db
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+.vercel
