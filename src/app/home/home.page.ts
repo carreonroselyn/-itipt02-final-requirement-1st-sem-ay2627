@@ -347,19 +347,25 @@ export class HomePage implements OnInit, OnDestroy {
         quality: 85,
         allowEditing: false,
         resultType: CameraResultType.DataUrl,
-        source: CameraSource.Prompt,
+        source: CameraSource.Camera,
+        width: 1024,
+        height: 1024,
+        correctOrientation: true,
+        webUseInput: true,
       });
       if (!photo.dataUrl) {
         this.showToast('Hindi nakuha ang larawan. Subukan ulit.');
         return;
       }
-      if (photo.dataUrl.length > 3_400_000) {
+      const compressed = await this.compressPhoto(photo.dataUrl);
+      if (compressed.length > 3_400_000) {
         this.showToast('Maximum 2.5 MB ang photo para mabilis i-upload.');
         return;
       }
-      this.reportForm.photoUrl = photo.dataUrl;
+      this.reportForm.photoUrl = compressed;
     } catch (error) {
-      this.showToast(this.errorMessage(error));
+      const message = this.errorMessage(error);
+      this.showToast(message.toLowerCase().includes('cancel') ? 'Pagkuha ng photo ay ipinagpaliban.' : message);
     }
   }
 
@@ -379,7 +385,7 @@ export class HomePage implements OnInit, OnDestroy {
     }
 
     try {
-      this.reportForm.photoUrl = await new Promise<string>((resolve, reject) => {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
           if (typeof reader.result !== 'string') {
@@ -391,6 +397,7 @@ export class HomePage implements OnInit, OnDestroy {
         reader.onerror = () => reject(new Error('Hindi mabasa ang napiling larawan.'));
         reader.readAsDataURL(file);
       });
+      this.reportForm.photoUrl = await this.compressPhoto(dataUrl);
     } catch (error) {
       this.showToast(this.errorMessage(error));
     }
@@ -408,6 +415,42 @@ export class HomePage implements OnInit, OnDestroy {
     } catch (error) {
       this.showToast(this.errorMessage(error));
     }
+  }
+
+  private async compressPhoto(dataUrl: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, 1024 / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) {
+          reject(new Error('Hindi ma-process ang larawan.'));
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Hindi ma-process ang larawan.'));
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve(typeof reader.result === 'string' ? reader.result : '');
+            };
+            reader.onerror = () => reject(new Error('Hindi mabasa ang naprosesong larawan.'));
+            reader.readAsDataURL(blob);
+          },
+          'image/jpeg',
+          0.82,
+        );
+      };
+      image.onerror = () => reject(new Error('Hindi mabasa ang napiling larawan.'));
+      image.src = dataUrl;
+    });
   }
 
   async advanceAnimal(animal: Animal): Promise<void> {
