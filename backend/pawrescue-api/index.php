@@ -193,12 +193,8 @@ try {
             $pdo->rollBack();
             respond(404, ['error' => 'Animal report not found.']);
         }
-        $adoptionQuery = $pdo->prepare('SELECT 1 FROM adoptions WHERE animal_id = ? LIMIT 1');
-        $adoptionQuery->execute([$id]);
-        if ($adoptionQuery->fetch()) {
-            $pdo->rollBack();
-            respond(409, ['error' => 'Animal reports with adoption history cannot be deleted.']);
-        }
+        $pdo->prepare('DELETE FROM adoptions WHERE animal_id = ?')->execute([$id]);
+        $pdo->prepare('DELETE FROM rescue_report_history WHERE animal_id = ?')->execute([$id]);
         $pdo->prepare('DELETE FROM animals WHERE id = ?')->execute([$id]);
         $pdo->commit();
         respond(200, ['data' => ['deleted' => true]]);

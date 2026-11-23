@@ -50,6 +50,21 @@ CREATE TABLE IF NOT EXISTS animals (
   CONSTRAINT fk_animals_reporter FOREIGN KEY (reported_by) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS rescue_report_history (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  animal_id BIGINT UNSIGNED NOT NULL,
+  changed_by BIGINT UNSIGNED NOT NULL,
+  event_type ENUM('submitted', 'status_changed') NOT NULL,
+  status ENUM('Pending Rescue', 'Rescued / In Transit', 'In Treatment', 'Healed & Ready', 'Reserved for Pickup')
+    NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_report_history_animal_created (animal_id, created_at),
+  KEY idx_report_history_actor (changed_by),
+  CONSTRAINT fk_report_history_animal FOREIGN KEY (animal_id) REFERENCES animals(id) ON DELETE CASCADE,
+  CONSTRAINT fk_report_history_actor FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS adoptions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   animal_id BIGINT UNSIGNED NOT NULL,

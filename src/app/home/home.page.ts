@@ -26,11 +26,13 @@ import {
   trash,
 } from 'ionicons/icons';
 
-import type { Adoption, Animal, AnimalStatus } from '../models/animal.model';
+import type { Adoption, Animal, AnimalReportHistory, AnimalStatus } from '../models/animal.model';
 import { RescueDataService } from '../services/rescue-data.service';
 
-type AppPage = 'feed' | 'report' | 'my-dashboard' | 'admin' | 'login';
+type AppPage = 'feed' | 'report' | 'my-reports' | 'admin' | 'login';
 type FeedCategory = 'All' | 'Dogs' | 'Cats' | 'Others';
+type AccountType = 'user' | 'admin';
+type AdminRescueFilter = 'all' | 'pending' | 'treatment' | 'ready';
 
 @Component({
   selector: 'app-home',
@@ -40,12 +42,13 @@ type FeedCategory = 'All' | 'Dogs' | 'Cats' | 'Others';
 })
 export class HomePage implements OnInit, OnDestroy {
   readonly data = inject(RescueDataService);
-  readonly page = signal<AppPage>('feed');
+  readonly page = signal<AppPage>('login');
   readonly category = signal<FeedCategory>('All');
   readonly genderFilter = signal<'All' | 'Male' | 'Female'>('All');
   readonly ageFilter = signal<'All' | 'Young' | 'Adult'>('All');
   readonly searchText = signal('');
-  readonly adminTab = signal<'rescue' | 'adoptions'>('rescue');
+  readonly adminTab = signal<'rescue' | 'history' | 'adoptions'>('rescue');
+  readonly adminFilter = signal<AdminRescueFilter>('all');
   readonly selectedAnimal = signal<Animal | null>(null);
   readonly toast = signal('');
   readonly filteredAnimals = computed(() => {
@@ -75,7 +78,14 @@ export class HomePage implements OnInit, OnDestroy {
     longitude: null as number | null,
   };
   adoptionForm = { contactNumber: '', homeDetails: '', reason: '' };
-  loginForm = { fullName: '', email: '', password: '', mode: 'login' as 'login' | 'register' };
+  passwordForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
+  loginForm = {
+    fullName: '',
+    email: '',
+    password: '',
+    mode: 'login' as 'login' | 'register',
+    accountType: 'user' as AccountType,
+  };
   private toastTimer?: ReturnType<typeof setTimeout>;
   private refreshTimer?: ReturnType<typeof setInterval>;
 
@@ -103,11 +113,35 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    void this.data.refresh().catch((error: unknown) => this.showToast(this.errorMessage(error)));
-    this.refreshTimer = setInterval(
-      () => void this.data.refresh().catch((error: unknown) => this.showToast(this.errorMessage(error))),
-      30000,
-    );
+    void this.refreshData().finally(() => {
+      if (this.data.authenticated() && this.data.identityVerified()) {
+        this.setPage(this.data.user().role === 'admin' ? 'admin' : 'feed');
+      } else {
+        this.setPage('login');
+      }
+    });
+    this.refreshTimer = setInterval(() => void this.refreshData(), 30000);
+  }
+
+  async refreshData(): Promise<void> {
+    const previousStatuses = new Map(this.data.adoptions().map((adoption) => [adoption.id, adoption.requestStatus]));
+    try {
+      await this.data.refresh();
+      const user = this.data.user();
+      if (user.role !== 'user') return;
+      const approved = this.data
+        .adoptions()
+        .find(
+          (adoption) =>
+            adoption.userId === user.id &&
+            adoption.requestStatus === 'Approved' &&
+            previousStatuses.has(adoption.id) &&
+            previousStatuses.get(adoption.id) !== 'Approved',
+        );
+      if (approved) this.showToast(`Request has been approved for ${approved.animalName || 'your pet'}.`);
+    } catch (error) {
+      this.showToast(this.errorMessage(error));
+    }
   }
 
   ngOnDestroy(): void {
@@ -119,7 +153,7 @@ export class HomePage implements OnInit, OnDestroy {
     return {
       feed: 'Find your new best friend',
       report: 'Report a stray animal',
-      'my-dashboard': 'Your rescue dashboard',
+      'my-reports': 'My reports and activity',
       admin: 'Rescue team dashboard',
       login: 'Welcome to PawRescue',
     }[this.page()];
@@ -136,7 +170,35 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   get myReports(): Animal[] {
-    return this.data.animals().filter((animal) => animal.reportedBy === this.data.user().fullName);
+    const user = this.data.user();
+    return this.data
+      .animals()
+      .filter((animal) =>
+        animal.reportedById
+          ? animal.reportedById === user.id
+          : user.id === 'demo-user' && animal.reportedBy === user.fullName,
+      );
+  }
+
+  get myReportHistory(): AnimalReportHistory[] {
+    const reportIds = new Set(this.myReports.map((animal) => animal.id));
+    return this.data.reportHistory().filter((entry) => reportIds.has(entry.animalId));
+  }
+
+  get adminReportHistory(): AnimalReportHistory[] {
+    return this.data.reportHistory();
+  }
+
+  reportHistoryLabel(entry: AnimalReportHistory): string {
+    if (entry.eventType === 'submitted') return 'Report submitted';
+    const labels: Record<AnimalStatus, string> = {
+      'Pending Rescue': 'Report pending',
+      'Rescued / In Transit': 'Rescue accepted',
+      'In Treatment': 'Treatment started',
+      'Healed & Ready': 'Cleared for adoption',
+      'Reserved for Pickup': 'Reserved for pickup',
+    };
+    return labels[entry.status];
   }
 
   get myAdoptions(): Adoption[] {
@@ -161,24 +223,90 @@ export class HomePage implements OnInit, OnDestroy {
     return [...this.data.animals()].sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt));
   }
 
+  get filteredAdminAnimals(): Animal[] {
+    const animals = this.adminAnimals;
+    switch (this.adminFilter()) {
+      case 'pending':
+        return animals.filter((animal) => animal.status === 'Pending Rescue');
+      case 'treatment':
+        return animals.filter((animal) => animal.status === 'In Treatment' || animal.status === 'Rescued / In Transit');
+      case 'ready':
+        return animals.filter((animal) => animal.status === 'Healed & Ready');
+      default:
+        return animals;
+    }
+  }
+
+  get adminFilterLabel(): string {
+    return {
+      all: 'All rescue reports',
+      pending: 'Pending rescue alerts',
+      treatment: 'Animals in treatment',
+      ready: 'Ready for adoption',
+    }[this.adminFilter()];
+  }
+
+  get adminFilterEmptyMessage(): string {
+    return {
+      all: 'All rescue alerts are up to date',
+      pending: 'No pending rescue alerts',
+      treatment: 'No animals in treatment',
+      ready: 'No animals ready for adoption',
+    }[this.adminFilter()];
+  }
+
+  selectDashboardMetric(metric: Exclude<AdminRescueFilter, 'all'> | 'adoptions'): void {
+    if (metric === 'adoptions') {
+      this.adminTab.set('adoptions');
+      return;
+    }
+    this.adminFilter.set(metric);
+    this.adminTab.set('rescue');
+  }
+
+  selectAdminTab(tab: 'rescue' | 'history' | 'adoptions'): void {
+    this.adminTab.set(tab);
+    if (tab === 'rescue') this.adminFilter.set('all');
+  }
+
   setPage(page: AppPage): void {
+    const signedIn = this.data.authenticated() && this.data.identityVerified();
+    const role = this.data.user().role;
+    if ((page === 'report' || page === 'my-reports') && (!signedIn || role !== 'user')) {
+      this.page.set(signedIn && role === 'admin' ? 'admin' : 'login');
+      this.loginForm.mode = 'login';
+      this.showToast(
+        signedIn && role === 'admin'
+          ? 'Client features are not available to admin accounts.'
+          : 'Mag-sign in muna para magpatuloy.',
+      );
+      return;
+    }
+    if (page === 'admin' && (!signedIn || role !== 'admin')) {
+      this.page.set(signedIn ? 'feed' : 'login');
+      this.showToast('Admin login required.');
+      return;
+    }
+    if (page === 'feed' && signedIn && role === 'admin') {
+      this.page.set('admin');
+      return;
+    }
     this.selectedAnimal.set(null);
     this.page.set(page);
   }
 
-  useRole(role: 'user' | 'admin'): void {
-    this.data.useDemoRole(role);
-    this.setPage(role === 'admin' ? 'admin' : 'feed');
-    this.showToast(`Demo ${role} dashboard opened`);
-  }
-
   logout(): void {
     this.data.logout();
-    this.setPage('feed');
-    this.showToast('Signed out. You are viewing the demo user feed.');
+    this.setPage('login');
+    this.showToast('Signed out. Mag-sign in ulit para magpatuloy.');
   }
 
   async submitReport(): Promise<void> {
+    if (!this.data.authenticated() || !this.data.identityVerified() || this.data.user().role !== 'user') {
+      this.setPage('login');
+      this.showToast('User account ang kailangan para magpadala ng report.');
+      return;
+    }
     const { animalType, address, conditionNotes, photoUrl, latitude, longitude } = this.reportForm;
     if (!address.trim() || !conditionNotes.trim()) {
       this.showToast('Ilagay ang lokasyon at kondisyon ng hayop.');
@@ -206,7 +334,7 @@ export class HomePage implements OnInit, OnDestroy {
         latitude: null,
         longitude: null,
       };
-      this.setPage('my-dashboard');
+      this.setPage('my-reports');
       this.showToast('Rescue alert submitted. Salamat sa pagtulong!');
     } catch (error) {
       this.showToast(this.errorMessage(error));
@@ -219,19 +347,25 @@ export class HomePage implements OnInit, OnDestroy {
         quality: 85,
         allowEditing: false,
         resultType: CameraResultType.DataUrl,
-        source: CameraSource.Prompt,
+        source: CameraSource.Camera,
+        width: 1024,
+        height: 1024,
+        correctOrientation: true,
+        webUseInput: true,
       });
       if (!photo.dataUrl) {
         this.showToast('Hindi nakuha ang larawan. Subukan ulit.');
         return;
       }
-      if (photo.dataUrl.length > 3_400_000) {
+      const compressed = await this.compressPhoto(photo.dataUrl);
+      if (compressed.length > 3_400_000) {
         this.showToast('Maximum 2.5 MB ang photo para mabilis i-upload.');
         return;
       }
-      this.reportForm.photoUrl = photo.dataUrl;
+      this.reportForm.photoUrl = compressed;
     } catch (error) {
-      this.showToast(this.errorMessage(error));
+      const message = this.errorMessage(error);
+      this.showToast(message.toLowerCase().includes('cancel') ? 'Pagkuha ng photo ay ipinagpaliban.' : message);
     }
   }
 
@@ -251,7 +385,7 @@ export class HomePage implements OnInit, OnDestroy {
     }
 
     try {
-      this.reportForm.photoUrl = await new Promise<string>((resolve, reject) => {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
           if (typeof reader.result !== 'string') {
@@ -263,6 +397,7 @@ export class HomePage implements OnInit, OnDestroy {
         reader.onerror = () => reject(new Error('Hindi mabasa ang napiling larawan.'));
         reader.readAsDataURL(file);
       });
+      this.reportForm.photoUrl = await this.compressPhoto(dataUrl);
     } catch (error) {
       this.showToast(this.errorMessage(error));
     }
@@ -280,6 +415,42 @@ export class HomePage implements OnInit, OnDestroy {
     } catch (error) {
       this.showToast(this.errorMessage(error));
     }
+  }
+
+  private async compressPhoto(dataUrl: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, 1024 / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) {
+          reject(new Error('Hindi ma-process ang larawan.'));
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Hindi ma-process ang larawan.'));
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve(typeof reader.result === 'string' ? reader.result : '');
+            };
+            reader.onerror = () => reject(new Error('Hindi mabasa ang naprosesong larawan.'));
+            reader.readAsDataURL(blob);
+          },
+          'image/jpeg',
+          0.82,
+        );
+      };
+      image.onerror = () => reject(new Error('Hindi mabasa ang napiling larawan.'));
+      image.src = dataUrl;
+    });
   }
 
   async advanceAnimal(animal: Animal): Promise<void> {
@@ -350,8 +521,19 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   startAdoption(animal: Animal): void {
-    if (!this.data.user().id || this.data.user().role !== 'user') {
-      this.showToast('Mag-sign in bilang adopter para mag-request.');
+    if (
+      !this.data.authenticated() ||
+      !this.data.identityVerified() ||
+      !this.data.user().id ||
+      this.data.user().role !== 'user'
+    ) {
+      if (this.data.user().role === 'admin') {
+        this.setPage('admin');
+        this.showToast('Adoption is only available to user accounts.');
+      } else {
+        this.setPage('login');
+        this.showToast('Mag-sign in bilang adopter para mag-request.');
+      }
       return;
     }
     this.adoptionForm = { contactNumber: '', homeDetails: '', reason: '' };
@@ -359,6 +541,12 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   async submitAdoption(): Promise<void> {
+    if (!this.data.authenticated() || !this.data.identityVerified() || this.data.user().role !== 'user') {
+      this.selectedAnimal.set(null);
+      this.setPage(this.data.user().role === 'admin' ? 'admin' : 'login');
+      this.showToast('Adoption is only available to signed-in user accounts.');
+      return;
+    }
     const animal = this.selectedAnimal();
     const form = this.adoptionForm;
     if (!animal) return;
@@ -378,7 +566,7 @@ export class HomePage implements OnInit, OnDestroy {
         animalPhoto: animal.photoUrl,
       });
       this.selectedAnimal.set(null);
-      this.setPage('my-dashboard');
+      this.setPage('my-reports');
       this.showToast('Adoption request sent. A rescuer will review it soon.');
     } catch (error) {
       this.showToast(this.errorMessage(error));
@@ -397,12 +585,57 @@ export class HomePage implements OnInit, OnDestroy {
   async submitAuth(): Promise<void> {
     try {
       if (this.loginForm.mode === 'register') {
+        if (this.loginForm.accountType !== 'user') {
+          this.showToast('Admin account registration is not available here.');
+          return;
+        }
         await this.data.register(this.loginForm.fullName.trim(), this.loginForm.email.trim(), this.loginForm.password);
       } else {
         await this.data.login(this.loginForm.email.trim(), this.loginForm.password);
+        if (this.data.user().role !== this.loginForm.accountType) {
+          const actualRole = this.data.user().role;
+          this.data.logout();
+          this.showToast(
+            `This is a ${actualRole} account. Choose the ${actualRole === 'admin' ? 'Admin' : 'User'} account option.`,
+          );
+          return;
+        }
       }
       this.setPage(this.data.user().role === 'admin' ? 'admin' : 'feed');
-      this.showToast(`Welcome, ${this.data.user().fullName}!`);
+      try {
+        await this.data.refresh();
+        if (this.data.backendOnline()) {
+          this.showToast(`Welcome, ${this.data.user().fullName}!`);
+        } else {
+          this.showToast(`Signed in, but account data could not sync: ${this.data.backendMessage()}`);
+        }
+      } catch (error) {
+        this.showToast(`Signed in, but account data could not sync: ${this.errorMessage(error)}`);
+      }
+    } catch (error) {
+      this.showToast(this.errorMessage(error));
+    }
+  }
+
+  selectAccountType(accountType: AccountType): void {
+    this.loginForm.accountType = accountType;
+    if (accountType === 'admin') this.loginForm.mode = 'login';
+  }
+
+  async changePassword(): Promise<void> {
+    const { currentPassword, newPassword, confirmPassword } = this.passwordForm;
+    if (newPassword.length < 8) {
+      this.showToast('New password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      this.showToast('Hindi magkapareho ang bagong password at confirmation.');
+      return;
+    }
+    try {
+      await this.data.changePassword(currentPassword, newPassword);
+      this.passwordForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
+      this.showToast('Password updated. Other sign-in sessions were signed out.');
     } catch (error) {
       this.showToast(this.errorMessage(error));
     }
